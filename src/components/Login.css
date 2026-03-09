@@ -1,0 +1,149 @@
+/* Login.css */
+:root {
+  --primary-color: #6366f1;
+  --primary-hover: #4f46e5;
+  --error-color: #ef4444;
+  --text-color: #1e293b;
+  --light-gray: #f8fafc;
+  --border-radius: 12px;
+  --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+
+
+.login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+  background-color: var(--light-gray);
+}
+
+.login-box {
+  display: flex;
+  max-width: 900px;
+  width: 100%;
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  overflow: hidden;
+}
+
+.login-left {
+  flex: 1;
+  padding: 2rem;
+}
+
+.login-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background-color: #f1f5f9;
+}
+
+.illustration {
+  max-width: 120px;
+  height: auto;
+  margin-bottom: 1rem;
+}
+
+.logo-text {
+  color: var(--text-color);
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+h2 {
+  color: var(--text-color);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.login-button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.login-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.error-message {
+  color: var(--error-color);
+  background-color: #fee2e2;
+  padding: 0.75rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .login-box {
+    flex-direction: column;
+  }
+
+  .login-right {
+    display: none; /* Hide the right side on mobile */
+  }
+
+  .login-left {
+    padding: 1.5rem;
+  }
+
+  .logo-text {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-wrapper {
+    padding: 0.5rem;
+  }
+
+  .login-left {
+    padding: 1.25rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+}

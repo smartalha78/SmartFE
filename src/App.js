@@ -1,24 +1,45 @@
-import logo from './logo.svg';
-import './App.css';
+// src/App.js
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import Login from "./components/Login";
+import Dashboard from "./components/Dashboard";
+import UserRightsManager from "./components/BusinessAdministration/UserRights";
+import EmployeeManagement from "./components/MasterData/EmployeeFiles/EmployeeManagement";
+import { AuthProvider } from "./AuthContext";
+import { CompanyProvider } from "./context/CompanyContext";
+import { RightsProvider } from "./context/RightsContext"; // Import RightsProvider
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <AuthProvider>
+      <CompanyProvider>
+        <RightsProvider> {/* Add RightsProvider here */}
+          <Router>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<Navigate to="/login" />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/:appName/:companyName/Login" element={<Login />} />
+              
+              {/* Dashboard route */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/:appName/:companyName/dashboard" element={<Dashboard />} />
+              
+              {/* User Rights route */}
+              <Route path="/user-rights" element={<UserRightsManager />} />
+              <Route path="/:appName/:companyName/user-rights" element={<UserRightsManager />} />
+              
+              {/* Employee Management route */}
+              <Route path="/employee-management" element={<EmployeeManagement />} />
+              <Route path="/:appName/:companyName/employee-management" element={<EmployeeManagement />} />
+              
+              {/* 404 fallback */}
+              <Route path="*" element={<div>Page Not Found</div>} />
+            </Routes>
+          </Router>
+        </RightsProvider>
+      </CompanyProvider>
+    </AuthProvider>
   );
 }
 
