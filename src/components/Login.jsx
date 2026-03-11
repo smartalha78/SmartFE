@@ -5,6 +5,7 @@ import { AuthContext } from "../AuthContext";
 import "./Login.css";
 import Logo from '../Assets/logo.png';
 import API_BASE1 from "../config"
+
 function Login() {
   const [username, setUsername] = useState("talha");
   const [password, setPassword] = useState("abc123");
@@ -98,46 +99,117 @@ function Login() {
         vType: item.vType
       }));
 
-      // Map username to user ID (you need to define this mapping)
-      const userIdMap = {
-        'talha': '2',
-        'usman': '3',
-        'admin': '1',
-      };
+      // Fetch user data from COMUSERS table to get the correct UID
+      console.log("Fetching COMUSERS data...");
+      const usersRes = await fetch(`${API_BASE}/get-table-data`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tableName: "COMUSERS"
+        })
+      });
 
-      const userId = userIdMap[username.trim()] || '10';
+      let userId = "0"; // Default value
+      let userFullName = "";
+      let userEmail = "";
+      let userMobile = "";
+      let userLogin = "";
+      let userPassword = "";
 
-      // Save credentials in AuthContext with offcode and Uid
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        console.log("Users data from COMUSERS:", usersData);
+        
+        // Check if we have rows in the response
+        if (usersData.rows && usersData.rows.length > 0) {
+          console.log(`Found ${usersData.rows.length} users in COMUSERS table`);
+          
+          // Find the user with matching username (case-insensitive comparison)
+          const matchedUser = usersData.rows.find(
+            user => user.Userlogin && user.Userlogin.toLowerCase() === username.trim().toLowerCase()
+          );
+          
+          if (matchedUser) {
+            userId = matchedUser.Uid;
+            userFullName = matchedUser.Userfullname || "";
+            userEmail = matchedUser.Useremail || "";
+            userMobile = matchedUser.userMobile || "";
+            userLogin = matchedUser.Userlogin || "";
+            userPassword = matchedUser.Userpassword || "";
+            
+            console.log(`✅ Found user ${username} in COMUSERS table with UID: ${userId}`);
+            console.log("User details:", {
+              Uid: userId,
+              fullName: userFullName,
+              email: userEmail,
+              mobile: userMobile
+            });
+          } else {
+            console.warn(`❌ User ${username} not found in COMUSERS table`);
+            console.log("Available usernames in COMUSERS:", 
+              usersData.rows.map(u => u.Userlogin).filter(Boolean));
+          }
+        } else {
+          console.warn("No users data received from COMUSERS - rows array is empty");
+        }
+      } else {
+        console.warn(`Failed to fetch COMUSERS data. Status: ${usersRes.status}`);
+        const errorText = await usersRes.text();
+        console.warn("Error response:", errorText);
+      }
+
+      // Save credentials in AuthContext with Uid from COMUSERS
       const userCredentials = { 
         username: username.trim(), 
         password: password.trim(),
-        Uid: userId,
-        offcode: offcode,  // This is the important part!
+        Uid: userId, // This now comes from COMUSERS table dynamically
+        offcode: offcode,
         companyName: company.name,
-        branches: branches
+        branches: branches,
+        userFullName: userFullName,
+        userEmail: userEmail,
+        userMobile: userMobile,
+        userLogin: userLogin
       };
 
-      console.log("Saving credentials with offcode:", userCredentials);
+      console.log("📝 Saving credentials with UID from COMUSERS:", {
+        username: userCredentials.username,
+        Uid: userCredentials.Uid,
+        offcode: userCredentials.offcode,
+        companyName: userCredentials.companyName,
+        userFullName: userCredentials.userFullName
+      });
+      
       login(userCredentials);
 
-      // Store app data
-      localStorage.setItem(
-        "appData",
-        JSON.stringify({
-          company,
-          branches,
-          menu,
-          rawData: result.data,
-          lastUpdated: new Date().toISOString()
-        })
-      );
+      // Store app data with complete user details
+      const appData = {
+        company,
+        branches,
+        menu,
+        rawData: result.data,
+        userDetails: {
+          Uid: userId,
+          fullName: userFullName,
+          email: userEmail,
+          mobile: userMobile,
+          login: userLogin,
+          offcode: offcode
+        },
+        lastUpdated: new Date().toISOString()
+      };
+      
+      localStorage.setItem("appData", JSON.stringify(appData));
 
-      console.log("Login successful! User ID:", userId, "Offcode:", offcode);
+      console.log("✅ Login successful! User ID from COMUSERS:", userId, "Offcode:", offcode);
+      console.log("App data saved to localStorage");
       
       navigate("/dashboard");
 
     } catch (err) {
-      console.error("Login Error:", err);
+      console.error("❌ Login Error:", err);
       setError(err.message || "Login failed. Please try again.");
       
       localStorage.removeItem("authCredentials");
