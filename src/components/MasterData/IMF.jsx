@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import "./ChartofAccount.css";
+import "./CustomerSupplierProfile.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
 import API_BASE1 from "../../config";
+import * as Icons from 'lucide-react';
 
 /* ---------------------------
  * API & Configuration
@@ -36,41 +37,22 @@ const API_CONFIG = {
 const useAuth = () => useContext(AuthContext);
 
 /* ---------------------------
- * Utilities & Icons
+ * Utilities
 ---------------------------- */
 const normalizeValue = (value) => {
     if (value === null || value === undefined || value === 'null' || value === 'undefined') return '';
     return String(value);
 };
 
-const Icon = {
-    Save: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
-    Plus: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-    Edit: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-    Trash: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6M1 6h22"></path></svg>,
-    Package: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>,
-    Search: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
-    Refresh: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6" /><path d="M21.02 12.8C20.45 18.05 16.94 22 12 22A9 9 0 0 1 3 13m1.27-5.8C4.55 3.95 7.84 2 12 2h.1C16.94 2 20.45 5.95 21.02 11.2" /></svg>,
-    CheckCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
-    XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
-    Loader: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="loader"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>,
-    DollarSign: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>,
-    Settings: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
-    BarChart: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>,
-    Folder: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
-    FileText: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>,
-    ChevronRight: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>,
-    ChevronDown: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
-    Database: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"></path></svg>,
-    Building: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
-    Warehouse: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M8 11h8"></path><path d="M8 15h8"></path><path d="M8 19h8"></path></svg>,
-    Image: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>,
-    Upload: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
-    Camera: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>,
-    Eye: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
-    EyeOff: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
-    Info: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>,
-    Users: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+// Helper function to check active status
+const isActiveValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'boolean') return value === true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        return value === "true" || value === "1" || value === "True" || value === "TRUE";
+    }
+    return false;
 };
 
 /* ---------------------------
@@ -193,17 +175,13 @@ const useDataService = () => {
             const filteredAccounts = (allAccountsData || []).filter(acc =>
                 normalizeValue(acc.parent) === parentAccount &&
                 normalizeValue(acc.offcode) === currentOffcode &&
-                (normalizeValue(acc.isActive) === 'true' ||
-                    normalizeValue(acc.isActive) === '1' ||
-                    normalizeValue(acc.isActive) === true)
+                isActiveValue(acc.isActive)
             );
 
             // Filtered Godowns
             const filteredGodowns = (allGodownsData || []).filter(godown =>
                 normalizeValue(godown.offcode) === currentOffcode &&
-                (normalizeValue(godown.IsActive) === 'true' ||
-                    normalizeValue(godown.IsActive) === '1' ||
-                    normalizeValue(godown.IsActive) === true)
+                isActiveValue(godown.IsActive)
             );
 
             // Filtered UOM
@@ -229,13 +207,6 @@ const useDataService = () => {
                 symbol: normalizeValue(uom.cSHD)
             }));
 
-            const uomTypes = Array.isArray(itemsData)
-                ? [...new Set(itemsData.map(item => item.uom))].filter(Boolean).map(code => ({
-                    code,
-                    name: `UOM ${code}`
-                }))
-                : [];
-
             // Set Lookup Data
             setLookupData({
                 itemTypes: [
@@ -249,7 +220,7 @@ const useDataService = () => {
                     { code: '3', name: 'Services' },
                     { code: '4', name: 'BUNDLE' }
                 ],
-                uomTypes,
+                uomTypes: [],
                 storeTypes: processedGodowns,
                 accounts: processedAccounts,
                 branches: allBranchesData,
@@ -296,16 +267,16 @@ const CollapsibleSection = ({ title, icon, children, defaultExpanded = true }) =
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
     return (
-        <div className={`form-section ${isExpanded ? 'expanded' : 'collapsed'}`}>
-            <div className="section-header" onClick={() => setIsExpanded(!isExpanded)}>
-                <div className="section-title">
+        <div className={`csp-form-section ${isExpanded ? 'csp-expanded' : 'csp-collapsed'}`}>
+            <div className="csp-section-header" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="csp-section-title">
                     {icon}
-                    <h3>{title}</h3>
+                    <h4>{title}</h4>
                 </div>
-                <Icon.ChevronDown className={`chevron ${isExpanded ? 'expanded' : ''}`} />
+                <Icons.ChevronDown className={`csp-chevron ${isExpanded ? 'csp-expanded' : ''}`} size={18} />
             </div>
             {isExpanded && (
-                <div className="section-content">
+                <div className="csp-section-content">
                     {children}
                 </div>
             )}
@@ -364,15 +335,15 @@ const ImageUpload = ({ imageUrl, onImageChange, itemCode, canEdit }) => {
     };
 
     return (
-        <div className="image-upload-section">
-            <div className="image-preview-container">
+        <div className="csp-image-upload-section">
+            <div className="csp-image-preview-container">
                 {previewUrl ? (
-                    <div className="image-preview">
+                    <div className="csp-image-preview">
                         <img src={previewUrl} alt="Item" />
                         {canEdit && (
                             <button
                                 type="button"
-                                className="remove-image-btn"
+                                className="csp-remove-image-btn"
                                 onClick={handleRemoveImage}
                             >
                                 ×
@@ -380,15 +351,15 @@ const ImageUpload = ({ imageUrl, onImageChange, itemCode, canEdit }) => {
                         )}
                     </div>
                 ) : (
-                    <div className="image-placeholder">
-                        <Icon.Camera className="placeholder-icon" />
+                    <div className="csp-image-placeholder">
+                        <Icons.Camera className="csp-placeholder-icon" size={24} />
                         <span>No Image</span>
                     </div>
                 )}
             </div>
 
             {canEdit && (
-                <div className="upload-controls">
+                <div className="csp-upload-controls">
                     <input
                         type="file"
                         id="image-upload"
@@ -397,11 +368,11 @@ const ImageUpload = ({ imageUrl, onImageChange, itemCode, canEdit }) => {
                         disabled={isUploading}
                         style={{ display: 'none' }}
                     />
-                    <label htmlFor="image-upload" className="upload-btn">
-                        <Icon.Upload />
+                    <label htmlFor="image-upload" className="csp-upload-btn">
+                        <Icons.Upload size={16} />
                         {isUploading ? 'Uploading...' : 'Upload Image'}
                     </label>
-                    <div className="upload-hint">
+                    <div className="csp-upload-hint">
                         Supports JPG, PNG, GIF • Max 5MB
                     </div>
                 </div>
@@ -426,51 +397,52 @@ const ItemTreeNode = ({ node, level = 0, onSelect, selectedItem, searchTerm, has
     };
 
     return (
-        <div className="tree-node">
-            <div className={`tree-node-row ${isSelected ? 'selected' : ''}`} style={{ paddingLeft: `${level * 18 + 12}px` }}>
-                <div className="tree-left">
+        <div className="csp-tree-node">
+            <div 
+                className={`csp-tree-node-row ${isSelected ? 'csp-selected' : ''}`} 
+                style={{ paddingLeft: `${level * 20 + 12}px` }}
+            >
+                <div className="csp-tree-left">
                     {hasChildren ? (
                         <button
-                            className="toggle-btn"
+                            className="csp-toggle-btn"
                             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
                         >
-                            {expanded ? <Icon.ChevronDown className="small" /> : <Icon.ChevronRight className="small" />}
+                            {expanded ? <Icons.ChevronDown size={16} /> : <Icons.ChevronRight size={16} />}
                         </button>
                     ) : (
-                        <div className="spacer"></div>
+                        <div className="csp-spacer"></div>
                     )}
-                    <div className="tree-main" onClick={() => onSelect(node)}>
-                        <div className="node-content">
+                    <div className="csp-tree-main" onClick={() => onSelect(node)}>
+                        <div className="csp-node-content">
                             {hasChildren ? (
-                                <Icon.Folder className="folder-icon" />
+                                <Icons.Folder className="csp-folder-icon" size={16} />
                             ) : (
-                                <Icon.Package className="item-icon" />
+                                <Icons.Package className="csp-item-icon" size={16} />
                             )}
-                            <div className="node-text">
-                                <div className="code">{nodeCode}</div>
-                                <div className="name">{nodeName}</div>
+                            <div className="csp-node-text">
+                                <span className="csp-code">{nodeCode}</span>
+                                <span className="csp-name">{nodeName}</span>
                             </div>
                         </div>
-                        <div className="node-level">Level {node.nlevel}</div>
+                        <span className="csp-node-level-badge">L{node.nlevel}</span>
                     </div>
                 </div>
-                <div className="tree-right">
-                    <div className={`status ${node.isActive === 'true' || node.isActive === true ? 'active' : 'inactive'}`}>
-                        {node.isActive === 'true' || node.isActive === true ? '✓' : '✗'}
-                    </div>
+                <div className="csp-tree-right">
+                    <div className={`csp-status-dot ${isActiveValue(node.isActive) ? 'csp-active' : 'csp-inactive'}`} />
                     {hasPermission && hasPermission(menuId, 'delete') && (
                         <button
-                            className="delete-btn"
+                            className="csp-delete-btn"
                             onClick={handleDeleteClick}
                             title="Delete Item"
                         >
-                            <Icon.Trash />
+                            <Icons.Trash2 size={14} />
                         </button>
                     )}
                 </div>
             </div>
             {expanded && hasChildren && (
-                <div className="children">
+                <div className="csp-children">
                     {node.children.map(child => (
                         <ItemTreeNode
                             key={normalizeValue(child.ItemCode)}
@@ -552,40 +524,42 @@ const ItemTreeSidebar = ({ items, selectedItem, onItemSelect, searchTerm, onSear
     const visibleTree = searchTerm ? filterTree(fullTree) : fullTree;
 
     return (
-        <aside className="sidebar">
-            <div className="sidebar-top">
-                <div className="sidebar-title">
-                    <Icon.Package className="big" />
-                    <div>
-                        <div className="h3">Item Hierarchy</div>
-                        <div className="muted small">{items.length} items</div>
-                    </div>
+        <aside className="csp-sidebar">
+            <div className="csp-sidebar-header">
+                <div className="csp-sidebar-title">
+                    <Icons.Package size={20} />
+                    <h3>Item Hierarchy</h3>
+                    <span className="csp-item-count">{items.length} items</span>
                 </div>
-                <div className="search-wrap">
-                    <Icon.Search className="search-icon" />
-                    <input
-                        placeholder="Search items..."
-                        value={searchTerm}
-                        onChange={e => onSearchChange(e.target.value)}
-                    />
+                <div className="csp-sidebar-actions">
+                    <div className="csp-search-container">
+                        <Icons.Search size={16} className="csp-search-icon" />
+                        <input
+                            placeholder="Search items..."
+                            value={searchTerm}
+                            onChange={e => onSearchChange(e.target.value)}
+                            className="csp-search-input"
+                        />
+                    </div>
+                    <button className="csp-btn csp-btn-icon" disabled={isLoading}>
+                        <Icons.RefreshCw size={16} className={isLoading ? 'csp-spin' : ''} />
+                    </button>
                 </div>
             </div>
-            <div className="sidebar-body">
+            <div className="csp-sidebar-content">
                 {isLoading ? (
-                    <div className="center padded">
-                        <Icon.Loader className="loader" />
-                        <div>Loading items...</div>
+                    <div className="csp-loading-state">
+                        <Icons.Loader size={32} className="csp-spin" />
+                        <p>Loading items...</p>
                     </div>
                 ) : visibleTree.length === 0 ? (
-                    <div className="empty-state padded">
-                        <Icon.Folder className="big-muted" />
-                        <div className="muted">No items found</div>
-                        <div className="small muted">
-                            {searchTerm ? 'Try a different search term' : 'Create a root item to get started'}
-                        </div>
+                    <div className="csp-empty-state">
+                        <Icons.FolderOpen size={48} className="csp-empty-icon" />
+                        <h4>No items found</h4>
+                        <p>{searchTerm ? 'Try a different search term' : 'Create a root item to get started'}</p>
                     </div>
                 ) : (
-                    <div className="tree-container">
+                    <div className="csp-tree-container">
                         {visibleTree.map(n => (
                             <ItemTreeNode
                                 key={normalizeValue(n.ItemCode)}
@@ -656,43 +630,46 @@ const ItemDetailForm = ({
     } = lookupData;
 
     return (
-        <section className="detail-panel">
-            <div className="detail-header">
-                <div className="header-content">
-                    <h1>{isNewMode ? 'Create New Item' : `Item Details: ${ItemName || 'Item'}`}</h1>
-                    <div className="header-subtitle">
-                        <span className="mode-badge">{isNewMode ? 'NEW' : 'EDIT'}</span>
-                        <span className="muted">• Level {nlevel}</span>
-                        <span className="muted">• {ItemCode}</span>
-                        {!(isActive === 'true' || isActive === true) && <span className="inactive-badge">INACTIVE</span>}
-                        {isLevel4 && <span className="level4-badge">MAX LEVEL</span>}
+        <div className="csp-detail-panel">
+            <div className="csp-detail-header">
+                <div>
+                    <h2>{isNewMode ? 'Create New Item' : `Item: ${ItemName || 'Item'}`}</h2>
+                    <div className="csp-detail-meta">
+                        <span className={`csp-mode-badge ${isNewMode ? 'csp-new' : 'csp-edit'}`}>
+                            {isNewMode ? 'NEW' : 'EDIT'}
+                        </span>
+                        <span className="csp-code-badge">{ItemCode || 'No Code'}</span>
+                        <span className="csp-office-badge">Level {nlevel}</span>
+                        {!isActiveValue(isActive) && <span className="csp-inactive-badge">INACTIVE</span>}
+                        {isLevel4 && <span className="csp-level4-badge">MAX LEVEL</span>}
                     </div>
                 </div>
-                <div className="header-actions">
+                <div className="csp-detail-actions">
                     {canEdit && (
                         <>
                             <button
-                                className="btn btn-toggle"
+                                className="csp-btn csp-btn-outline"
                                 onClick={onToggleFields}
                                 title={showAllFields ? "Show basic fields" : "Show all fields"}
                             >
-                                {showAllFields ? <Icon.EyeOff /> : <Icon.Eye />}
+                                {showAllFields ? <Icons.EyeOff size={16} /> : <Icons.Eye size={16} />}
                                 {showAllFields ? "Basic View" : "Full View"}
                             </button>
                             <button
-                                className="btn btn-outline"
+                                className="csp-btn csp-btn-outline"
                                 onClick={onNewItem}
                                 disabled={isLevel4 && !isNewMode}
                                 title={isLevel4 ? "Cannot create child at maximum level (4)" : "Create new child item"}
                             >
-                                <Icon.Plus /> {selectedItem && currentMode === 'edit' ? 'New Child' : 'New Root'}
+                                <Icons.Plus size={16} />
+                                {selectedItem && currentMode === 'edit' ? 'New Child' : 'New Root'}
                             </button>
                             <button
-                                className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+                                className={`csp-btn csp-btn-primary ${isLoading ? 'csp-loading' : ''}`}
                                 onClick={onSave}
                                 disabled={isLoading || isDataLoading || !ItemCode || !ItemName}
                             >
-                                {isLoading ? <Icon.Loader className="spin" /> : <Icon.Save />}
+                                {isLoading ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
                                 {isLoading ? 'Saving...' : 'Save Item'}
                             </button>
                         </>
@@ -700,14 +677,14 @@ const ItemDetailForm = ({
                 </div>
             </div>
 
-            <div className="detail-body">
-                <div className="form-layout">
+            <div className="csp-detail-content">
+                <div className="csp-form-layout">
                     {/* Left Column - Image and Basic Info */}
-                    <div className="form-column">
-                        <CollapsibleSection title="Item Images" icon={<Icon.Image />} defaultExpanded={true}>
-                            <div className="multiple-images-section">
-                                <div className="image-grid">
-                                    <div className="image-upload-item">
+                    <div className="csp-form-column">
+                        <CollapsibleSection title="Item Images" icon={<Icons.Image size={18} />} defaultExpanded={true}>
+                            <div className="csp-multiple-images-section">
+                                <div className="csp-image-grid">
+                                    <div className="csp-image-upload-item">
                                         <label>Main Image</label>
                                         <ImageUpload
                                             imageUrl={pictureURL}
@@ -716,7 +693,7 @@ const ItemDetailForm = ({
                                             canEdit={canEdit}
                                         />
                                     </div>
-                                    <div className="image-upload-item">
+                                    <div className="csp-image-upload-item">
                                         <label>Image 2</label>
                                         <ImageUpload
                                             imageUrl={pictureURL1}
@@ -725,7 +702,7 @@ const ItemDetailForm = ({
                                             canEdit={canEdit}
                                         />
                                     </div>
-                                    <div className="image-upload-item">
+                                    <div className="csp-image-upload-item">
                                         <label>Image 3</label>
                                         <ImageUpload
                                             imageUrl={pictureURL2}
@@ -734,7 +711,7 @@ const ItemDetailForm = ({
                                             canEdit={canEdit}
                                         />
                                     </div>
-                                    <div className="image-upload-item">
+                                    <div className="csp-image-upload-item">
                                         <label>Image 4</label>
                                         <ImageUpload
                                             imageUrl={pictureURL3}
@@ -747,61 +724,72 @@ const ItemDetailForm = ({
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Basic Information" icon={<Icon.FileText />} defaultExpanded={true}>
-                            <div className="form-grid compact">
-                                <div className="field">
+                        <CollapsibleSection title="Basic Information" icon={<Icons.FileText size={18} />} defaultExpanded={true}>
+                            <div className="csp-form-grid csp-grid-2">
+                                <div className="csp-field-group">
                                     <label>Parent Code</label>
-                                    <div className="input-with-icon">
-                                        <Icon.Folder className="input-icon" />
-                                        <input value={ItemParent} disabled className="mono" />
+                                    <div className="csp-field-display">
+                                        <Icons.Folder size={16} />
+                                        <span className="csp-mono">{ItemParent}</span>
                                     </div>
                                 </div>
-                                <div className="field">
-                                    <label>Item Code *</label>
-                                    <div className="input-with-icon">
-                                        <Icon.Package className="input-icon" />
-                                        <input value={ItemCode} disabled className="mono" />
+                                <div className="csp-field-group">
+                                    <label>Item Code</label>
+                                    <div className="csp-field-display">
+                                        <Icons.Package size={16} />
+                                        <span className="csp-mono">{ItemCode}</span>
                                     </div>
-                                    {isNewMode && <div className="hint">Auto-generated based on parent</div>}
+                                    {isNewMode && <span className="csp-field-hint">Auto-generated based on parent</span>}
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Level</label>
-                                    <input value={nlevel} disabled />
+                                    <div className="csp-field-display">
+                                        <Icons.Layers size={16} />
+                                        <span>{nlevel}</span>
+                                    </div>
                                 </div>
 
-                                <div className="field full-width">
+                                <div className="csp-field-group csp-full-width">
                                     <label>Item Name *</label>
                                     <input
                                         value={ItemName}
                                         onChange={e => handleInput('ItemName', e.target.value)}
                                         placeholder="Enter item name..."
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
 
-                                <div className="field full-width">
+                                <div className="csp-field-group csp-full-width">
                                     <label>Alternative Item Name</label>
                                     <input
                                         value={alterItemName}
                                         onChange={e => handleInput('alterItemName', e.target.value)}
                                         placeholder="Enter alternative name..."
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
 
-                                <div className="field full-width">
+                                <div className="csp-field-group csp-full-width">
                                     <label>Alternative Item Name 2</label>
                                     <input
                                         value={alterItemName1}
                                         onChange={e => handleInput('alterItemName1', e.target.value)}
                                         placeholder="Enter alternative name 2..."
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Item Type *</label>
-                                    <select value={ItemType} onChange={e => handleInput('ItemType', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={ItemType} 
+                                        onChange={e => handleInput('ItemType', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select item type</option>
                                         {itemTypes.map(t => (
                                             <option key={t.code} value={t.code}>{t.name}</option>
@@ -809,9 +797,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Inventory Type *</label>
-                                    <select value={InvType} onChange={e => handleInput('InvType', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={InvType} 
+                                        onChange={e => handleInput('InvType', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select inventory type</option>
                                         {inventoryTypes.map(t => (
                                             <option key={t.code} value={t.code}>{t.name}</option>
@@ -819,9 +812,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Unit of Measure</label>
-                                    <select value={uom} onChange={e => handleInput('uom', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={uom} 
+                                        onChange={e => handleInput('uom', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select UOM</option>
                                         {uomList.map(t => (
                                             <option key={t.code} value={t.code}>
@@ -831,30 +829,37 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Category</label>
-                                    <select value={typeCategory} onChange={e => handleInput('typeCategory', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={typeCategory} 
+                                        onChange={e => handleInput('typeCategory', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Category</option>
                                         <option value="Organic">Organic</option>
                                         <option value="In Organic">In Organic</option>
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Office/Branch</label>
-                                    <input value={currentOffcode} disabled />
-                                    <div className="hint">Auto-filled from login</div>
+                                    <div className="csp-field-display">
+                                        <Icons.Building2 size={16} />
+                                        <span>{currentOffcode}</span>
+                                    </div>
                                 </div>
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Store Types" icon={<Icon.Warehouse />} defaultExpanded={false}>
-                            <div className="field">
+                        <CollapsibleSection title="Store Types" icon={<Icons.Warehouse size={18} />} defaultExpanded={false}>
+                            <div className="csp-field-group">
                                 <label>Select Godowns</label>
-                                <div className="checkbox-group">
+                                <div className="csp-checkbox-group">
                                     {storeTypes.map(store => (
-                                        <div key={store.code} className="checkbox-item">
-                                            <label className="checkbox-label">
+                                        <div key={store.code} className="csp-checkbox-item">
+                                            <label className="csp-checkbox-wrapper">
                                                 <input
                                                     type="checkbox"
                                                     checked={StoreMainType && StoreMainType.includes(store.code)}
@@ -875,17 +880,17 @@ const ItemDetailForm = ({
                                                     }}
                                                     disabled={!canEdit}
                                                 />
-                                                <span className="checkmark"></span>
+                                                <span className="csp-checkbox-custom"></span>
                                                 {store.code} - {store.name}
                                             </label>
                                         </div>
                                     ))}
                                 </div>
                                 {storeTypes.length === 0 && !isDataLoading && (
-                                    <div className="hint error">No active godowns found for office {currentOffcode}</div>
+                                    <div className="csp-field-hint csp-error">No active godowns found for office {currentOffcode}</div>
                                 )}
                                 {StoreMainType && (
-                                    <div className="hint">Selected: {StoreMainType.split(',').map(code => {
+                                    <div className="csp-field-hint">Selected: {StoreMainType.split(',').map(code => {
                                         const store = storeTypes.find(s => s.code === code);
                                         return store ? `${store.code}-${store.name}` : code;
                                     }).join(', ')}</div>
@@ -895,9 +900,9 @@ const ItemDetailForm = ({
 
                         {showAllFields && (
                             <>
-                                <CollapsibleSection title="Packing Information" icon={<Icon.Package />} defaultExpanded={false}>
-                                    <div className="form-grid compact">
-                                        <div className="field">
+                                <CollapsibleSection title="Packing Information" icon={<Icons.Package size={18} />} defaultExpanded={false}>
+                                    <div className="csp-form-grid csp-grid-2">
+                                        <div className="csp-field-group">
                                             <label>Packing Quantity</label>
                                             <input
                                                 type="number"
@@ -906,9 +911,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingQty', e.target.value)}
                                                 placeholder="0.000"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Packing Net Weight</label>
                                             <input
                                                 type="number"
@@ -917,9 +923,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingNetWeight', e.target.value)}
                                                 placeholder="0.000"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Packing Gross Weight</label>
                                             <input
                                                 type="number"
@@ -928,9 +935,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingGrossWeight', e.target.value)}
                                                 placeholder="0.000"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Packing Length</label>
                                             <input
                                                 type="number"
@@ -938,9 +946,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingLenth', e.target.value)}
                                                 placeholder="0"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Packing Width</label>
                                             <input
                                                 type="number"
@@ -948,9 +957,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingWidth', e.target.value)}
                                                 placeholder="0"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Packing Height</label>
                                             <input
                                                 type="number"
@@ -958,56 +968,62 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('PackingHight', e.target.value)}
                                                 placeholder="0"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
                                     </div>
                                 </CollapsibleSection>
 
-                                <CollapsibleSection title="Additional Information" icon={<Icon.Info />} defaultExpanded={false}>
-                                    <div className="form-grid compact">
-                                        <div className="field">
+                                <CollapsibleSection title="Additional Information" icon={<Icons.Info size={18} />} defaultExpanded={false}>
+                                    <div className="csp-form-grid csp-grid-2">
+                                        <div className="csp-field-group">
                                             <label>Part Number</label>
                                             <input
                                                 value={PartNo}
                                                 onChange={e => handleInput('PartNo', e.target.value)}
                                                 placeholder="Enter part number..."
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>HS Code</label>
                                             <input
                                                 value={HsCode}
                                                 onChange={e => handleInput('HsCode', e.target.value)}
                                                 placeholder="Enter HS code..."
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Alternative Code</label>
                                             <input
                                                 value={alternativeCode}
                                                 onChange={e => handleInput('alternativeCode', e.target.value)}
                                                 placeholder="Enter alternative code..."
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Branch Alternative Code</label>
                                             <input
                                                 value={branchalternativecode}
                                                 onChange={e => handleInput('branchalternativecode', e.target.value)}
                                                 placeholder="Enter branch alternative code..."
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group csp-full-width">
                                             <label>Head Item Code</label>
                                             <input
                                                 value={HeadItemCode}
                                                 onChange={e => handleInput('HeadItemCode', e.target.value)}
                                                 placeholder="Enter head item code..."
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
                                     </div>
@@ -1017,38 +1033,34 @@ const ItemDetailForm = ({
                     </div>
 
                     {/* Right Column - Other Sections */}
-                    <div className="form-column">
-                        <CollapsibleSection title="Pricing Information" icon={<Icon.DollarSign />} defaultExpanded={false}>
-                            <div className="form-grid compact">
-                                <div className="field">
+                    <div className="csp-form-column">
+                        <CollapsibleSection title="Pricing Information" icon={<Icons.DollarSign size={18} />} defaultExpanded={false}>
+                            <div className="csp-form-grid csp-grid-2">
+                                <div className="csp-field-group">
                                     <label>Cost Price</label>
-                                    <div className="input-with-icon">
-                                        <Icon.DollarSign className="input-icon" />
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={CostPrice}
-                                            onChange={e => handleInput('CostPrice', e.target.value)}
-                                            placeholder="0.00"
-                                            disabled={!canEdit}
-                                        />
-                                    </div>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={CostPrice}
+                                        onChange={e => handleInput('CostPrice', e.target.value)}
+                                        placeholder="0.00"
+                                        disabled={!canEdit}
+                                        className="csp-form-input"
+                                    />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Sale Price</label>
-                                    <div className="input-with-icon">
-                                        <Icon.DollarSign className="input-icon" />
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={SalePrice}
-                                            onChange={e => handleInput('SalePrice', e.target.value)}
-                                            placeholder="0.00"
-                                            disabled={!canEdit}
-                                        />
-                                    </div>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={SalePrice}
+                                        onChange={e => handleInput('SalePrice', e.target.value)}
+                                        placeholder="0.00"
+                                        disabled={!canEdit}
+                                        className="csp-form-input"
+                                    />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Discount Percentage</label>
                                     <input
                                         type="number"
@@ -1056,9 +1068,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('DiscountPer', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Discount Amount</label>
                                     <input
                                         type="number"
@@ -1067,14 +1080,15 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('DiscountAmt', e.target.value)}
                                         placeholder="0.000"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Inventory Control" icon={<Icon.BarChart />} defaultExpanded={false}>
-                            <div className="form-grid compact">
-                                <div className="field">
+                        <CollapsibleSection title="Inventory Control" icon={<Icons.BarChart2 size={18} />} defaultExpanded={false}>
+                            <div className="csp-form-grid csp-grid-2">
+                                <div className="csp-field-group">
                                     <label>Minimum Quantity</label>
                                     <input
                                         type="number"
@@ -1082,9 +1096,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('minQty', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Critical Quantity</label>
                                     <input
                                         type="number"
@@ -1092,9 +1107,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('CriticalQty', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Reorder Quantity</label>
                                     <input
                                         type="number"
@@ -1102,20 +1118,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('ReorderQty', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
-                                    <label>Packing Quantity</label>
-                                    <input
-                                        type="number"
-                                        step="0.001"
-                                        value={PackingQty}
-                                        onChange={e => handleInput('PackingQty', e.target.value)}
-                                        placeholder="0.000"
-                                        disabled={!canEdit}
-                                    />
-                                </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Delivery Time (Days)</label>
                                     <input
                                         type="number"
@@ -1123,9 +1129,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('DeliveryTime', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Excess Quantity (%)</label>
                                     <input
                                         type="number"
@@ -1134,9 +1141,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('excessQtyper', e.target.value)}
                                         placeholder="0.00"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Opening Balance Qty</label>
                                     <input
                                         type="number"
@@ -1145,9 +1153,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('OPbalQty', e.target.value)}
                                         placeholder="0.000"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Opening Balance Value</label>
                                     <input
                                         type="number"
@@ -1156,9 +1165,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('OPbalValue', e.target.value)}
                                         placeholder="0.000"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Current Balance Qty</label>
                                     <input
                                         type="number"
@@ -1167,9 +1177,10 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('balQty', e.target.value)}
                                         placeholder="0.000"
                                         disabled
+                                        className="csp-form-input"
                                     />
                                 </div>
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Current Balance Value</label>
                                     <input
                                         type="number"
@@ -1178,34 +1189,39 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('balValue', e.target.value)}
                                         placeholder="0.000"
                                         disabled
+                                        className="csp-form-input"
                                     />
                                 </div>
                                 {showAllFields && (
-                                    <>
-                                        <div className="field">
-                                            <label>No Expiration Days</label>
-                                            <input
-                                                type="number"
-                                                value={noExpDays}
-                                                onChange={e => handleInput('noExpDays', e.target.value)}
-                                                placeholder="0"
-                                                disabled={!canEdit}
-                                            />
-                                        </div>
-                                    </>
+                                    <div className="csp-field-group">
+                                        <label>No Expiration Days</label>
+                                        <input
+                                            type="number"
+                                            value={noExpDays}
+                                            onChange={e => handleInput('noExpDays', e.target.value)}
+                                            placeholder="0"
+                                            disabled={!canEdit}
+                                            className="csp-form-input"
+                                        />
+                                    </div>
                                 )}
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Account Mapping" icon={<Icon.Database />} defaultExpanded={false}>
-                            <div className="account-note">
-                                <Icon.Info className="info-icon" />
+                        <CollapsibleSection title="Account Mapping" icon={<Icons.Database size={18} />} defaultExpanded={false}>
+                            <div className="csp-account-note">
+                                <Icons.Info size={16} className="csp-info-icon" />
                                 <span>Accounts are filtered dynamically based on branch configuration</span>
                             </div>
-                            <div className="form-grid compact">
-                                <div className="field">
+                            <div className="csp-form-grid csp-grid-2">
+                                <div className="csp-field-group">
                                     <label>Asset Account</label>
-                                    <select value={AssetAccount} onChange={e => handleInput('AssetAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={AssetAccount} 
+                                        onChange={e => handleInput('AssetAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Asset Account</option>
                                         {accounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1213,9 +1229,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Purchase Return Account</label>
-                                    <select value={PurchaseReturnAccount} onChange={e => handleInput('PurchaseReturnAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={PurchaseReturnAccount} 
+                                        onChange={e => handleInput('PurchaseReturnAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Purchase Return Account</option>
                                         {accounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1223,9 +1244,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Input Tax Account</label>
-                                    <select value={InputTaxAccount} onChange={e => handleInput('InputTaxAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={InputTaxAccount} 
+                                        onChange={e => handleInput('InputTaxAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Input Tax Account</option>
                                         {fixedAccounts.inputTaxAccounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1236,7 +1262,7 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Input Tax Rate</label>
                                     <input
                                         type="number"
@@ -1245,12 +1271,18 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('InputTaxRate', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Income Account</label>
-                                    <select value={IncomeAccount} onChange={e => handleInput('IncomeAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={IncomeAccount} 
+                                        onChange={e => handleInput('IncomeAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Income Account</option>
                                         {fixedAccounts.incomeAccounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1261,9 +1293,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Sales Return Account</label>
-                                    <select value={SalesReturnAccount} onChange={e => handleInput('SalesReturnAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={SalesReturnAccount} 
+                                        onChange={e => handleInput('SalesReturnAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Sales Return Account</option>
                                         {accounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1271,9 +1308,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Output Tax Account</label>
-                                    <select value={OutPutTaxAccount} onChange={e => handleInput('OutPutTaxAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={OutPutTaxAccount} 
+                                        onChange={e => handleInput('OutPutTaxAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Output Tax Account</option>
                                         {fixedAccounts.outputTaxAccounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1284,7 +1326,7 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Output Tax Rate</label>
                                     <input
                                         type="number"
@@ -1293,12 +1335,18 @@ const ItemDetailForm = ({
                                         onChange={e => handleInput('OutPutTaxRate', e.target.value)}
                                         placeholder="0"
                                         disabled={!canEdit}
+                                        className="csp-form-input"
                                     />
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Consumption Account</label>
-                                    <select value={ConsumptionAccount} onChange={e => handleInput('ConsumptionAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={ConsumptionAccount} 
+                                        onChange={e => handleInput('ConsumptionAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Consumption Account</option>
                                         {fixedAccounts.consumptionAccounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1309,9 +1357,14 @@ const ItemDetailForm = ({
                                     </select>
                                 </div>
 
-                                <div className="field">
+                                <div className="csp-field-group">
                                     <label>Adjustment Account</label>
-                                    <select value={AdjustmentAccount} onChange={e => handleInput('AdjustmentAccount', e.target.value)} disabled={!canEdit}>
+                                    <select 
+                                        value={AdjustmentAccount} 
+                                        onChange={e => handleInput('AdjustmentAccount', e.target.value)} 
+                                        disabled={!canEdit}
+                                        className="csp-form-select"
+                                    >
                                         <option value="">Select Adjustment Account</option>
                                         {accounts.map(acc => (
                                             <option key={acc.code} value={acc.code}>{acc.name}</option>
@@ -1323,9 +1376,9 @@ const ItemDetailForm = ({
 
                         {showAllFields && (
                             <>
-                                <CollapsibleSection title="Lead Times" icon={<Icon.Settings />} defaultExpanded={false}>
-                                    <div className="form-grid compact">
-                                        <div className="field">
+                                <CollapsibleSection title="Lead Times" icon={<Icons.Clock size={18} />} defaultExpanded={false}>
+                                    <div className="csp-form-grid csp-grid-2">
+                                        <div className="csp-field-group">
                                             <label>Delivery Lead Time</label>
                                             <input
                                                 type="number"
@@ -1333,9 +1386,10 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('DeliveryLeadTime', e.target.value)}
                                                 placeholder="0"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Manufacturing Lead Time</label>
                                             <input
                                                 type="number"
@@ -1343,131 +1397,144 @@ const ItemDetailForm = ({
                                                 onChange={e => handleInput('ManufacturLeadTime', e.target.value)}
                                                 placeholder="0"
                                                 disabled={!canEdit}
+                                                className="csp-form-input"
                                             />
                                         </div>
                                     </div>
                                 </CollapsibleSection>
 
-                                <CollapsibleSection title="Audit Information" icon={<Icon.FileText />} defaultExpanded={false}>
-                                    <div className="form-grid compact">
-                                        <div className="field">
+                                <CollapsibleSection title="Audit Information" icon={<Icons.FileText size={18} />} defaultExpanded={false}>
+                                    <div className="csp-form-grid csp-grid-2">
+                                        <div className="csp-field-group">
                                             <label>Created By</label>
-                                            <input value={createdby} disabled />
+                                            <div className="csp-field-display">
+                                                <Icons.User size={16} />
+                                                <span>{createdby || '-'}</span>
+                                            </div>
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Created Date</label>
-                                            <input type="datetime-local" value={createdate} disabled />
+                                            <div className="csp-field-display">
+                                                <Icons.Calendar size={16} />
+                                                <span>{createdate ? new Date(createdate).toLocaleString() : '-'}</span>
+                                            </div>
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Last Edited By</label>
-                                            <input value={editby} disabled />
+                                            <div className="csp-field-display">
+                                                <Icons.User size={16} />
+                                                <span>{editby || '-'}</span>
+                                            </div>
                                         </div>
-                                        <div className="field">
+                                        <div className="csp-field-group">
                                             <label>Last Edited Date</label>
-                                            <input type="datetime-local" value={editdate} disabled />
+                                            <div className="csp-field-display">
+                                                <Icons.Calendar size={16} />
+                                                <span>{editdate ? new Date(editdate).toLocaleString() : '-'}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </CollapsibleSection>
                             </>
                         )}
 
-                        <CollapsibleSection title="Item Flags" icon={<Icon.Settings />} defaultExpanded={false}>
-                            <div className="flags-grid compact">
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                        <CollapsibleSection title="Item Flags" icon={<Icons.Settings size={18} />} defaultExpanded={false}>
+                            <div className="csp-flags-grid">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={isActive === 'true' || isActive === true}
+                                            checked={isActiveValue(isActive)}
                                             onChange={e => handleInput('isActive', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Active Item
                                     </label>
                                 </div>
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={isPurchase === 'true' || isPurchase === true}
+                                            checked={isActiveValue(isPurchase)}
                                             onChange={e => handleInput('isPurchase', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Purchase Item
                                     </label>
                                 </div>
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={isManufactur === 'true' || isManufactur === true}
+                                            checked={isActiveValue(isManufactur)}
                                             onChange={e => handleInput('isManufactur', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Manufacturing Item
                                     </label>
                                 </div>
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={isConsumeable === 'true' || isConsumeable === true}
+                                            checked={isActiveValue(isConsumeable)}
                                             onChange={e => handleInput('isConsumeable', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Consumable Item
                                     </label>
                                 </div>
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={isDispatch === 'true' || isDispatch === true}
+                                            checked={isActiveValue(isDispatch)}
                                             onChange={e => handleInput('isDispatch', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Dispatch Item
                                     </label>
                                 </div>
-                                <div className="field checkbox">
-                                    <label className="checkbox-label">
+                                <div className="csp-field-group csp-checkbox">
+                                    <label className="csp-checkbox-wrapper">
                                         <input
                                             type="checkbox"
-                                            checked={IsItemLevel === 'true' || IsItemLevel === true}
+                                            checked={isActiveValue(IsItemLevel)}
                                             onChange={e => handleInput('IsItemLevel', e.target.checked ? 'true' : 'false')}
                                             disabled={!canEdit}
                                         />
-                                        <span className="checkmark"></span>
+                                        <span className="csp-checkbox-custom"></span>
                                         Item Level
                                     </label>
                                 </div>
                                 {showAllFields && (
                                     <>
-                                        <div className="field checkbox">
-                                            <label className="checkbox-label">
+                                        <div className="csp-field-group csp-checkbox">
+                                            <label className="csp-checkbox-wrapper">
                                                 <input
                                                     type="checkbox"
-                                                    checked={isOutSource === 'true' || isOutSource === true}
+                                                    checked={isActiveValue(isOutSource)}
                                                     onChange={e => handleInput('isOutSource', e.target.checked ? 'true' : 'false')}
                                                     disabled={!canEdit}
                                                 />
-                                                <span className="checkmark"></span>
+                                                <span className="csp-checkbox-custom"></span>
                                                 Outsource Item
                                             </label>
                                         </div>
-                                        <div className="field checkbox">
-                                            <label className="checkbox-label">
+                                        <div className="csp-field-group csp-checkbox">
+                                            <label className="csp-checkbox-wrapper">
                                                 <input
                                                     type="checkbox"
-                                                    checked={isbundleItem === 'true' || isbundleItem === true}
+                                                    checked={isActiveValue(isbundleItem)}
                                                     onChange={e => handleInput('isbundleItem', e.target.checked ? 'true' : 'false')}
                                                     disabled={!canEdit}
                                                 />
-                                                <span className="checkmark"></span>
+                                                <span className="csp-checkbox-custom"></span>
                                                 Bundle Item
                                             </label>
                                         </div>
@@ -1478,7 +1545,7 @@ const ItemDetailForm = ({
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
     );
 };
 
@@ -1948,51 +2015,54 @@ const ItemProfile = ({ initialMode = 'new' }) => {
 
     if (rightsLoading && !menuId) {
         return (
-            <div className="loading-container">
-                <Icon.Loader className="loader spin" />
+            <div className="csp-loading-container">
+                <Icons.Loader size={40} className="csp-spin" />
                 <p>Loading user rights...</p>
             </div>
         );
     }
 
     return (
-        <div className="cfa-page">
-            <div className="app-header">
-                <div className="header-brand">
-                    <Icon.Package className="brand-icon" />
+        <div className="csp-container">
+            <header className="csp-header">
+                <div className="csp-header-left">
+                    <Icons.Package size={24} className="csp-header-icon" />
                     <div>
                         <h1>Item Profile</h1>
-                        <div className="muted">Manage your item hierarchy and inventory</div>
+                        <span className="csp-header-subtitle">Manage your item hierarchy and inventory</span>
                     </div>
                 </div>
-                <div className="header-user">
+                <div className="csp-header-right">
                     <button
-                        className="toggle-view-btn"
+                        className="csp-btn csp-btn-outline csp-toggle-view-btn"
                         onClick={toggleAllFields}
                         title={showAllFields ? "Show basic fields" : "Show all fields"}
                     >
-                        {showAllFields ? <Icon.EyeOff /> : <Icon.Eye />}
+                        {showAllFields ? <Icons.EyeOff size={16} /> : <Icons.Eye size={16} />}
                         {showAllFields ? "Basic View" : "Full View"}
                     </button>
-                    <Icon.Users className="icon-sm" />
+                    <Icons.User size={16} />
                     <span>{USER_LOGIN}</span>
+                    <span className="csp-office-tag">Office: {currentOffcode}</span>
                 </div>
-            </div>
+            </header>
 
-            <div className="toolbar">
-                <div className="toolbar-section">
+            <div className="csp-toolbar">
+                <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
-                        <button className="toolbar-btn primary" onClick={handleSave} disabled={isLoading}>
-                            <Icon.Save /> {isLoading ? 'Saving...' : 'Save'}
+                        <button className="csp-toolbar-btn csp-primary" onClick={handleSave} disabled={isLoading}>
+                            {isLoading ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
+                            <span>{isLoading ? 'Saving...' : 'Save'}</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'add') && (
-                        <button className="toolbar-btn" onClick={handleNewItemClick}>
-                            <Icon.Plus /> New Item
+                        <button className="csp-toolbar-btn" onClick={handleNewItemClick}>
+                            <Icons.Plus size={16} />
+                            <span>New Item</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'edit') && (
-                        <button className="toolbar-btn" onClick={() => {
+                        <button className="csp-toolbar-btn" onClick={() => {
                             if (selectedItem) {
                                 setCurrentMode('edit');
                                 loadItemDataIntoForm(selectedItem);
@@ -2000,29 +2070,33 @@ const ItemProfile = ({ initialMode = 'new' }) => {
                                 setMessage('Select an item to edit');
                             }
                         }}>
-                            <Icon.Edit /> Edit
+                            <Icons.Pencil size={16} />
+                            <span>Edit</span>
                         </button>
                     )}
                 </div>
 
-                <div className="toolbar-section">
-                    <button className="toolbar-btn" onClick={() => { fetchItems(); refetchLookupData(); setMessage('Refreshing...'); }}>
-                        <Icon.Refresh /> Refresh All Data
+                <div className="csp-toolbar-group">
+                    <button className="csp-toolbar-btn" onClick={() => { fetchItems(); refetchLookupData(); setMessage('Refreshing...'); }}>
+                        <Icons.RefreshCw size={16} />
+                        <span>Refresh All Data</span>
                     </button>
                 </div>
             </div>
 
             {lookupError && (
-                <div className="toast error">
-                    <div className="toast-content">
-                        <Icon.XCircle />
+                <div className="csp-toast csp-error">
+                    <div className="csp-toast-content">
+                        <Icons.AlertCircle size={18} />
                         <span>{lookupError}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setError('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setError('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
 
-            <div className="content-area">
+            <div className="csp-main-layout">
                 <ItemTreeSidebar
                     items={items}
                     selectedItem={selectedItem}
@@ -2035,14 +2109,15 @@ const ItemProfile = ({ initialMode = 'new' }) => {
                     onDelete={handleDeleteItem}
                 />
 
-                <div className="main-content">
-                    <div className="content-tabs">
-                        <button className="tab active">
-                            <Icon.FileText /> Item Details
+                <main className="csp-content-area">
+                    <div className="csp-content-tabs">
+                        <button className="csp-tab csp-active">
+                            <Icons.FileText size={16} />
+                            Item Details
                         </button>
                     </div>
 
-                    <div className="content-panel">
+                    <div className="csp-content-panel">
                         <ItemDetailForm
                             formData={formData}
                             onFormChange={updateFormData}
@@ -2059,18 +2134,20 @@ const ItemProfile = ({ initialMode = 'new' }) => {
                             menuId={menuId}
                         />
                     </div>
-                </div>
+                </main>
             </div>
 
             {message && (
-                <div className={`toast ${message.includes('❌') ? 'error' : message.includes('⚠️') ? 'warning' : 'success'}`}>
-                    <div className="toast-content">
-                        {message.includes('✅') && <Icon.CheckCircle />}
-                        {message.includes('❌') && <Icon.XCircle />}
-                        {message.includes('⚠️') && <Icon.XCircle />}
+                <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
+                    <div className="csp-toast-content">
+                        {message.includes('✅') && <Icons.CheckCircle size={18} />}
+                        {message.includes('❌') && <Icons.AlertCircle size={18} />}
+                        {message.includes('⚠️') && <Icons.AlertTriangle size={18} />}
                         <span>{message.replace(/[✅❌⚠️]/g, '')}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setMessage('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setMessage('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
         </div>

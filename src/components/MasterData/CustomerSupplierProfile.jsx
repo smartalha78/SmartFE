@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import "./ChartofAccount.css";
+import "./CustomerSupplierProfile.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
 import API_BASE1 from "../../config";
+import * as Icons from 'lucide-react';
+import Pagination from '../Common/Pagination';
 
 /* ---------------------------
  * API & Configuration
@@ -11,7 +13,7 @@ const API_CONFIG = {
     BASE_URL: API_BASE1,
     TABLES: {
         CUSTOMER_SUPPLIER: 'comcustomer',
-        SALESMAN: 'comSaleman',
+        SALESMAN: 'comSalesman',
         COUNTRY: 'Country',
         CITY: 'cities',
         ACCOUNT: 'acChartOfAccount',
@@ -33,30 +35,134 @@ const API_CONFIG = {
 const useAuth = () => useContext(AuthContext);
 
 /* ---------------------------
- * Utilities & Icons
+ * Utilities
 ---------------------------- */
 const normalizeValue = (value) => {
     if (value === null || value === undefined || value === 'null' || value === 'undefined') return '';
     return String(value);
 };
 
-const Icon = {
-    Save: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
-    Plus: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-    Edit: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-    Trash: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6M1 6h22"></path></svg>,
-    Search: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
-    Refresh: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6" /><path d="M21.02 12.8C20.45 18.05 16.94 22 12 22A9 9 0 0 1 3 13m1.27-5.8C4.55 3.95 7.84 2 12 2h.1C16.94 2 20.45 5.95 21.02 11.2" /></svg>,
-    ChevronDown: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
-    Loader: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="loader"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>,
-    User: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
-    MapPin: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
-    DollarSign: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>,
-    Tag: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 22.5L14 19H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 0 2 2h2v.5a2.5 2.5 0 0 1-2.5 2.5z"></path></svg>,
-    CreditCard: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>,
-    CheckCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
-    XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
-    Users: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+// ✅ Helper function to check if a value represents "active"
+const isActiveValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'boolean') return value === true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        return value === "true" || value === "1" || value === "True" || value === "TRUE";
+    }
+    return false;
+};
+
+// Format date to match database format (YYYY-MM-DD HH:MM:SS)
+const formatDateForDB = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+// Prepare data for database insertion/update
+const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
+    const now = new Date();
+    const formattedNow = formatDateForDB(now);
+    
+    // Base data with all required fields
+    const preparedData = {
+        offcode: currentOffcode,
+        CustomerCode: data.CustomerCode || '',
+        CustomerName: data.CustomerName || '',
+        CustomerNameAR: data.CustomerNameAR || '',
+        SHD: data.SHD || '',
+        isactive: isActiveValue(data.isactive) ? 'True' : 'False',
+        billaddress: data.billaddress || '',
+        billaddressAR: data.billaddressAR || '',
+        zipcode: data.zipcode || '',
+        CountryID: data.CountryID || '1',
+        country: data.country || 'Pakistan',
+        CityID: data.CityID || '1',
+        city: data.city || 'LAHORE',
+        phone1: data.phone1 || '',
+        mobile: data.mobile || '0',
+        fax: data.fax || '',
+        email: data.email || '',
+        type: data.type || '1',
+        IsSalesTax: data.IsSalesTax === 'true' ? 'True' : 'False',
+        SalesTaxNo: data.SalesTaxNo || '----',
+        SalesTaxNoAR: data.SalesTaxNoAR || '',
+        isCustomer: data.isCustomer === 'true' ? 'True' : 'False',
+        Customercreditisactive: data.Customercreditisactive === 'true' ? 'True' : 'False',
+        Customercreditdays: data.Customercreditdays || '0',
+        CustomerisDiscount: data.CustomerisDiscount === 'true' ? 'True' : 'False',
+        Customerdiscountper: data.Customerdiscountper || '0.00',
+        CustomerglCode: data.CustomerglCode || '',
+        CustomerCreditLimit: data.CustomerCreditLimit || '0.00',
+        isSupplier: data.isSupplier === 'true' ? 'True' : 'False',
+        Supplierrcreditisactive: data.Supplierrcreditisactive === 'true' ? 'True' : 'False',
+        Suppliercreditdays: data.Suppliercreditdays || '0',
+        SupplierisDiscount: data.SupplierisDiscount === 'true' ? 'True' : 'False',
+        Supplierdiscountper: data.Supplierdiscountper || '0.00',
+        SupplierglCode: data.SupplierglCode || '',
+        SupplierCreditLimit: data.SupplierCreditLimit || '0.00',
+        SaleManCode: data.SaleManCode || '',
+        isNTN: data.isNTN === 'true' ? 'True' : 'False',
+        NTN: data.NTN || '-',
+        CNIC: data.CNIC || '0',
+        ST1: data.ST1 || '',
+        ST2: data.ST2 || '',
+        ST3: data.ST3 || '',
+        ST4: data.ST4 || '',
+        ST5: data.ST5 || '',
+        CustomeralternativeCode: data.CustomeralternativeCode || '',
+        SupplieralternativeCode: data.SupplieralternativeCode || '',
+        PartyVendorCode: data.PartyVendorCode || '',
+        PartyCustomerCode: data.PartyCustomerCode || '',
+        PackageId: data.PackageId || '1',
+        PerMonthFee: data.PerMonthFee || '700',
+        PackageDate: data.PackageDate ? formatDateForDB(data.PackageDate) : formatDateForDB(now),
+        SectorCode: data.SectorCode || '000001',
+        isAcCreate: data.isAcCreate === 'true' ? 'True' : 'False',
+        PackageTotalAmount: data.PackageTotalAmount || '0',
+        PackageDownAmount: data.PackageDownAmount || '0',
+        PackageBalanceAmount: data.PackageBalanceAmount || '0',
+        PackageNoofInstallment: data.PackageNoofInstallment || '0',
+        ProductDetail: data.ProductDetail || '',
+        ProductDetailAR: data.ProductDetailAR || '',
+        State: data.State || '',
+        isTaxableInvoice: data.isTaxableInvoice === 'true' ? 'True' : 'False',
+        RateType: data.RateType || '1',
+        buytypeId: data.buytypeId || 'TIN',
+        buystreetname: data.buystreetname || '',
+        buybuildingname: data.buybuildingname || '',
+        buybuildno: data.buybuildno || '0',
+        buyplotid: data.buyplotid || '',
+        buyadbuildno: data.buyadbuildno || '',
+        buypostalzone: data.buypostalzone || '0',
+        buysubcitysubname: data.buysubcitysubname || '',
+        buycountrySubentity: data.buycountrySubentity || '',
+        buyContractAmount: data.buyContractAmount || '0.00',
+        sellersidtype: data.sellersidtype || 'CRN',
+        sellersid: data.sellersid || '',
+        scenarioId: data.scenarioId || 'SN001',
+        CustomerSupplierType: data.CustomerSupplierType || 'CUSTOMER/SUPPLIER',
+        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
+        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
+        editby: currentUser,
+        editdate: formattedNow
+    };
+
+    // Remove any undefined values
+    Object.keys(preparedData).forEach(key => {
+        if (preparedData[key] === undefined) {
+            preparedData[key] = '';
+        }
+    });
+
+    return preparedData;
 };
 
 /* ---------------------------
@@ -113,7 +219,7 @@ const getInitialCustomerData = (offcode = '1010') => ({
     PartyCustomerCode: '',
     PackageId: '1',
     PerMonthFee: '700',
-    PackageDate: new Date().toISOString().split('T')[0] + 'T00:00:00+05:00',
+    PackageDate: new Date().toISOString().split('T')[0],
     SectorCode: '000001',
     isAcCreate: 'false',
     PackageTotalAmount: '0',
@@ -140,9 +246,9 @@ const getInitialCustomerData = (offcode = '1010') => ({
     scenarioId: 'SN001',
     CustomerSupplierType: 'CUSTOMER/SUPPLIER',
     createdby: '',
-    createdate: new Date().toISOString().split('T')[0] + 'T00:00:00+05:00',
+    createdate: new Date().toISOString().split('T')[0],
     editby: '',
-    editdate: new Date().toISOString().split('T')[0] + 'T00:00:00+05:00'
+    editdate: new Date().toISOString().split('T')[0]
 });
 
 /* ---------------------------
@@ -183,7 +289,7 @@ const useDataService = () => {
         setError('');
 
         try {
-            const currentOffcode = credentials?.company?.offcode || '0101';
+            const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
 
             const [
                 customerData,
@@ -194,7 +300,7 @@ const useDataService = () => {
                 branchData
             ] = await Promise.all([
                 fetchTableData(API_CONFIG.TABLES.CUSTOMER_SUPPLIER),
-                fetchTableData(API_CONFIG.TABLES.SALESMAN),
+                fetchTableData(API_CONFIG.TABLES.SALESMAN).catch(() => []), // Handle error gracefully
                 fetchTableData(API_CONFIG.TABLES.COUNTRY),
                 fetchTableData(API_CONFIG.TABLES.CITY),
                 fetchTableData(API_CONFIG.TABLES.ACCOUNT),
@@ -205,36 +311,36 @@ const useDataService = () => {
                 normalizeValue(c.offcode) === currentOffcode
             );
 
-            const filteredSalesMen = salesManData.filter(s =>
-                normalizeValue(s.offcode) === currentOffcode
-            ).map(s => ({
-                code: normalizeValue(s.code),
-                name: normalizeValue(s.name)
-            }));
+            const filteredSalesMen = Array.isArray(salesManData) ? salesManData
+                .filter(s => normalizeValue(s.offcode) === currentOffcode)
+                .map(s => ({
+                    code: normalizeValue(s.code),
+                    name: normalizeValue(s.name)
+                })) : [];
 
-            const filteredGLAccounts = glAccountData
+            const filteredGLAccounts = Array.isArray(glAccountData) ? glAccountData
                 .filter(acc => acc.code && acc.name && normalizeValue(acc.offcode) === currentOffcode)
                 .map(acc => ({
                     code: normalizeValue(acc.code),
                     name: normalizeValue(acc.name)
-                }));
+                })) : [];
 
-            const currentBranch = branchData.find(b =>
+            const currentBranch = Array.isArray(branchData) ? branchData.find(b =>
                 normalizeValue(b.offcode) === currentOffcode
-            );
+            ) : null;
 
             setData(filteredCustomers);
             setLookupData({
                 saleMen: filteredSalesMen,
-                countries: countryData.map(c => ({
+                countries: Array.isArray(countryData) ? countryData.map(c => ({
                     id: normalizeValue(c.CountryID),
                     name: normalizeValue(c.CountryName)
-                })),
-                cities: cityData.map(c => ({
+                })) : [],
+                cities: Array.isArray(cityData) ? cityData.map(c => ({
                     id: normalizeValue(c.CityID),
                     name: normalizeValue(c.CityName),
                     countryId: normalizeValue(c.CountryID)
-                })),
+                })) : [],
                 glAccounts: filteredGLAccounts,
                 branchData: currentBranch
             });
@@ -268,7 +374,7 @@ const CustomerSupplierProfileForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
 
     const {
         offcode, CustomerCode, CustomerName, CustomerNameAR, SHD, isactive,
@@ -302,32 +408,35 @@ const CustomerSupplierProfileForm = ({
     );
 
     return (
-        <section className="detail-panel">
-            <div className="detail-header">
-                <div className="header-content">
-                    <h1>{isNewMode ? 'Create New Profile' : `Profile Details: ${CustomerName || 'Profile'}`}</h1>
-                    <div className="header-subtitle">
-                        <span className="mode-badge">{isNewMode ? 'NEW' : 'EDIT'}</span>
-                        <span className="muted">• {CustomerCode || 'No Code'}</span>
-                        <span className="muted">• Office: {currentOffcode}</span>
-                        {!(isactive === 'true') && <span className="inactive-badge">INACTIVE</span>}
+        <div className="csp-detail-panel">
+            <div className="csp-detail-header">
+                <div>
+                    <h2>{isNewMode ? 'Create New Profile' : `Profile: ${CustomerName || 'Profile'}`}</h2>
+                    <div className="csp-detail-meta">
+                        <span className={`csp-mode-badge ${isNewMode ? 'csp-new' : 'csp-edit'}`}>
+                            {isNewMode ? 'NEW' : 'EDIT'}
+                        </span>
+                        <span className="csp-code-badge">{CustomerCode || (isNewMode ? 'Generating...' : 'No Code')}</span>
+                        <span className="csp-office-badge">Office: {currentOffcode}</span>
+                        {!isActiveValue(isactive) && <span className="csp-inactive-badge">INACTIVE</span>}
                     </div>
                 </div>
-                <div className="header-actions">
+                <div className="csp-detail-actions">
                     {canEdit && (
                         <>
                             <button
-                                className="btn btn-outline"
+                                className="csp-btn csp-btn-outline"
                                 onClick={onNewProfile}
                             >
-                                <Icon.Plus /> New Profile
+                                <Icons.Plus size={16} />
+                                New Profile
                             </button>
                             <button
-                                className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+                                className={`csp-btn csp-btn-primary ${isLoading ? 'csp-loading' : ''}`}
                                 onClick={onSave}
                                 disabled={isLoading || !CustomerName || !CustomerCode}
                             >
-                                {isLoading ? <Icon.Loader className="spin" /> : <Icon.Save />}
+                                {isLoading ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
                                 {isLoading ? 'Saving...' : 'Save Profile'}
                             </button>
                         </>
@@ -335,383 +444,416 @@ const CustomerSupplierProfileForm = ({
                 </div>
             </div>
 
-            <div className="detail-body">
+            <div className="csp-detail-content">
                 {/* General Information */}
-                <div className="form-section expanded">
-                    <div className="section-header">
-                        <div className="section-title">
-                            <Icon.User />
-                            <h3>General Information</h3>
+                <div className="csp-form-section">
+                    <h4><Icons.User size={18} /> General Information</h4>
+                    <div className="csp-form-grid csp-grid-3">
+                        <div className="csp-field-group csp-required">
+                            <label>Customer Code *</label>
+                            <input
+                                type="text"
+                                value={CustomerCode}
+                                onChange={e => handleInput('CustomerCode', e.target.value)}
+                                disabled={true} // Always disabled - auto-generated
+                                placeholder="Auto-generated"
+                                className="csp-form-input csp-disabled-field"
+                            />
+                            {isNewMode && (
+                                <small className="csp-field-hint">Code is auto-generated and cannot be edited</small>
+                            )}
                         </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-grid grid-3-col">
-                            <div className="form-group required">
-                                <label>Customer Code *</label>
-                                <input
-                                    type="text"
-                                    value={CustomerCode}
-                                    onChange={e => handleInput('CustomerCode', e.target.value)}
-                                    disabled={!isNewMode || !canEdit}
-                                    placeholder="Enter unique code"
-                                />
+                        <div className="csp-field-group csp-required">
+                            <label>Name (English) *</label>
+                            <input
+                                type="text"
+                                value={CustomerName}
+                                onChange={e => handleInput('CustomerName', e.target.value)}
+                                placeholder="Enter customer name"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Short Hand (SHD)</label>
+                            <input
+                                type="text"
+                                value={SHD}
+                                onChange={e => handleInput('SHD', e.target.value)}
+                                placeholder="Short code"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Name (Arabic)</label>
+                            <input
+                                type="text"
+                                value={CustomerNameAR}
+                                onChange={e => handleInput('CustomerNameAR', e.target.value)}
+                                placeholder="Arabic name"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Office Code</label>
+                            <div className="csp-field-display">
+                                <Icons.Building2 size={16} />
+                                <span>{currentOffcode}</span>
                             </div>
-                            <div className="form-group required">
-                                <label>Name (English) *</label>
-                                <input
-                                    type="text"
-                                    value={CustomerName}
-                                    onChange={e => handleInput('CustomerName', e.target.value)}
-                                    placeholder="Enter customer name"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Short Hand (SHD)</label>
-                                <input
-                                    type="text"
-                                    value={SHD}
-                                    onChange={e => handleInput('SHD', e.target.value)}
-                                    placeholder="Short code"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Name (Arabic)</label>
-                                <input
-                                    type="text"
-                                    value={CustomerNameAR}
-                                    onChange={e => handleInput('CustomerNameAR', e.target.value)}
-                                    placeholder="Arabic name"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Office Code</label>
-                                <input type="text" value={currentOffcode} disabled />
-                            </div>
-                            <div className="form-group">
-                                <label>Profile Type</label>
-                                <select value={CustomerSupplierType} onChange={e => handleInput('CustomerSupplierType', e.target.value)} disabled={!canEdit}>
-                                    <option value="CUSTOMER">CUSTOMER</option>
-                                    <option value="SUPPLIER">SUPPLIER</option>
-                                    <option value="CUSTOMER/SUPPLIER">CUSTOMER/SUPPLIER</option>
-                                </select>
-                            </div>
-                            <div className="form-group checkbox-group">
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Profile Type</label>
+                            <select 
+                                value={CustomerSupplierType} 
+                                onChange={e => handleInput('CustomerSupplierType', e.target.value)} 
+                                disabled={!canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="CUSTOMER">CUSTOMER</option>
+                                <option value="SUPPLIER">SUPPLIER</option>
+                                <option value="CUSTOMER/SUPPLIER">CUSTOMER/SUPPLIER</option>
+                            </select>
+                        </div>
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
-                                    id="isActive"
-                                    checked={isactive === 'true'}
+                                    checked={isActiveValue(isactive)}
                                     onChange={e => handleCheckbox('isactive', e)}
                                     disabled={!canEdit}
                                 />
-                                <label htmlFor="isActive">Profile is Active</label>
-                            </div>
+                                <span className="csp-checkbox-custom"></span>
+                                Profile is Active
+                            </label>
                         </div>
                     </div>
                 </div>
 
                 {/* Contact & Address */}
-                <div className="form-section expanded">
-                    <div className="section-header">
-                        <div className="section-title">
-                            <Icon.MapPin />
-                            <h3>Contact & Address</h3>
+                <div className="csp-form-section">
+                    <h4><Icons.MapPin size={18} /> Contact & Address</h4>
+                    <div className="csp-form-grid csp-grid-3">
+                        <div className="csp-field-group">
+                            <label>Phone 1</label>
+                            <input
+                                type="text"
+                                value={phone1}
+                                onChange={e => handleInput('phone1', e.target.value)}
+                                placeholder="Primary phone"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
                         </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-grid grid-3-col">
-                            <div className="form-group">
-                                <label>Phone 1</label>
-                                <input
-                                    type="text"
-                                    value={phone1}
-                                    onChange={e => handleInput('phone1', e.target.value)}
-                                    placeholder="Primary phone"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Mobile</label>
-                                <input
-                                    type="text"
-                                    value={mobile}
-                                    onChange={e => handleInput('mobile', e.target.value)}
-                                    placeholder="Mobile number"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Email</label>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={e => handleInput('email', e.target.value)}
-                                    placeholder="Email address"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Fax</label>
-                                <input
-                                    type="text"
-                                    value={fax}
-                                    onChange={e => handleInput('fax', e.target.value)}
-                                    placeholder="Fax number"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Zip Code</label>
-                                <input
-                                    type="text"
-                                    value={zipcode}
-                                    onChange={e => handleInput('zipcode', e.target.value)}
-                                    placeholder="Postal code"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>State</label>
-                                <input
-                                    type="text"
-                                    value={formData.State}
-                                    onChange={e => handleInput('State', e.target.value)}
-                                    placeholder="State/Province"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group span-3-col">
-                                <label>Billing Address (English)</label>
-                                <input
-                                    type="text"
-                                    value={billaddress}
-                                    onChange={e => handleInput('billaddress', e.target.value)}
-                                    placeholder="Full billing address"
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Country</label>
-                                <select value={CountryID} onChange={e => handleInput('CountryID', e.target.value)} disabled={!canEdit}>
-                                    <option value="">Select Country</option>
-                                    {countries.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>City</label>
-                                <select value={CityID} onChange={e => handleInput('CityID', e.target.value)} disabled={!canEdit}>
-                                    <option value="">Select City</option>
-                                    {availableCities.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                        <div className="csp-field-group">
+                            <label>Mobile</label>
+                            <input
+                                type="text"
+                                value={mobile}
+                                onChange={e => handleInput('mobile', e.target.value)}
+                                placeholder="Mobile number"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Email</label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => handleInput('email', e.target.value)}
+                                placeholder="Email address"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Fax</label>
+                            <input
+                                type="text"
+                                value={fax}
+                                onChange={e => handleInput('fax', e.target.value)}
+                                placeholder="Fax number"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Zip Code</label>
+                            <input
+                                type="text"
+                                value={zipcode}
+                                onChange={e => handleInput('zipcode', e.target.value)}
+                                placeholder="Postal code"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>State</label>
+                            <input
+                                type="text"
+                                value={formData.State}
+                                onChange={e => handleInput('State', e.target.value)}
+                                placeholder="State/Province"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group csp-full-width">
+                            <label>Billing Address (English)</label>
+                            <input
+                                type="text"
+                                value={billaddress}
+                                onChange={e => handleInput('billaddress', e.target.value)}
+                                placeholder="Full billing address"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Country</label>
+                            <select 
+                                value={CountryID} 
+                                onChange={e => handleInput('CountryID', e.target.value)} 
+                                disabled={!canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select Country</option>
+                                {countries.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>City</label>
+                            <select 
+                                value={CityID} 
+                                onChange={e => handleInput('CityID', e.target.value)} 
+                                disabled={!canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select City</option>
+                                {availableCities.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>
 
                 {/* Customer Settings */}
-                <div className="form-section expanded">
-                    <div className="section-header">
-                        <div className="section-title">
-                            <Icon.User />
-                            <h3>Customer Settings</h3>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-grid grid-3-col">
-                            <div className="form-group checkbox-group span-3-col">
+                <div className="csp-form-section">
+                    <h4><Icons.UserCircle size={18} /> Customer Settings</h4>
+                    <div className="csp-form-grid csp-grid-3">
+                        <div className="csp-field-group csp-checkbox csp-full-width">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="isCustomer"
-                                    checked={isCustomer === 'true'}
+                                    checked={isActiveValue(isCustomer)}
                                     onChange={e => handleCheckbox('isCustomer', e)}
                                     disabled={!canEdit}
                                 />
-                                <label htmlFor="isCustomer">Is a Customer</label>
-                            </div>
-                            <div className="form-group checkbox-group">
+                                <span className="csp-checkbox-custom"></span>
+                                Is a Customer
+                            </label>
+                        </div>
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="custCreditActive"
-                                    checked={Customercreditisactive === 'true'}
+                                    checked={isActiveValue(Customercreditisactive)}
                                     onChange={e => handleCheckbox('Customercreditisactive', e)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
+                                    disabled={!isActiveValue(isCustomer) || !canEdit}
                                 />
-                                <label htmlFor="custCreditActive">Credit Active</label>
-                            </div>
-                            <div className="form-group">
-                                <label>Credit Days</label>
-                                <input
-                                    type="number"
-                                    value={Customercreditdays}
-                                    onChange={e => handleNumericInput('Customercreditdays', e.target.value)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Credit Limit</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={CustomerCreditLimit}
-                                    onChange={e => handleNumericInput('CustomerCreditLimit', e.target.value)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            <div className="form-group checkbox-group">
+                                <span className="csp-checkbox-custom"></span>
+                                Credit Active
+                            </label>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Credit Days</label>
+                            <input
+                                type="number"
+                                value={Customercreditdays}
+                                onChange={e => handleNumericInput('Customercreditdays', e.target.value)}
+                                disabled={!isActiveValue(isCustomer) || !canEdit}
+                                placeholder="0"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Credit Limit</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={CustomerCreditLimit}
+                                onChange={e => handleNumericInput('CustomerCreditLimit', e.target.value)}
+                                disabled={!isActiveValue(isCustomer) || !canEdit}
+                                placeholder="0.00"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="custDiscount"
-                                    checked={CustomerisDiscount === 'true'}
+                                    checked={isActiveValue(CustomerisDiscount)}
                                     onChange={e => handleCheckbox('CustomerisDiscount', e)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
+                                    disabled={!isActiveValue(isCustomer) || !canEdit}
                                 />
-                                <label htmlFor="custDiscount">Discount Active</label>
-                            </div>
-                            <div className="form-group">
-                                <label>Discount %</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={Customerdiscountper}
-                                    onChange={e => handleNumericInput('Customerdiscountper', e.target.value)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>GL Account Code *</label>
-                                <select
-                                    value={CustomerglCode}
-                                    onChange={e => handleInput('CustomerglCode', e.target.value)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
-                                >
-                                    <option value="">Select GL Account</option>
-                                    {customerGLAccounts.map(acc => (
-                                        <option key={acc.code} value={acc.code}>
-                                            {acc.code} - {acc.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Sales Man Code</label>
-                                <select
-                                    value={SaleManCode}
-                                    onChange={e => handleInput('SaleManCode', e.target.value)}
-                                    disabled={isCustomer !== 'true' || !canEdit}
-                                >
-                                    <option value="">Select Salesman</option>
-                                    {saleMen.map(sm => (
-                                        <option key={sm.code} value={sm.code}>
-                                            {sm.code} - {sm.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                                <span className="csp-checkbox-custom"></span>
+                                Discount Active
+                            </label>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Discount %</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={Customerdiscountper}
+                                onChange={e => handleNumericInput('Customerdiscountper', e.target.value)}
+                                disabled={!isActiveValue(isCustomer) || !canEdit}
+                                placeholder="0.00"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>GL Account Code *</label>
+                            <select
+                                value={CustomerglCode}
+                                onChange={e => handleInput('CustomerglCode', e.target.value)}
+                                disabled={!isActiveValue(isCustomer) || !canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select GL Account</option>
+                                {customerGLAccounts.map(acc => (
+                                    <option key={acc.code} value={acc.code}>
+                                        {acc.code} - {acc.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Sales Man Code</label>
+                            <select
+                                value={SaleManCode}
+                                onChange={e => handleInput('SaleManCode', e.target.value)}
+                                disabled={!isActiveValue(isCustomer) || !canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select Salesman</option>
+                                {saleMen.map(sm => (
+                                    <option key={sm.code} value={sm.code}>
+                                        {sm.code} - {sm.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>
 
                 {/* Supplier Settings */}
-                <div className="form-section expanded">
-                    <div className="section-header">
-                        <div className="section-title">
-                            <Icon.CreditCard />
-                            <h3>Supplier Settings</h3>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-grid grid-3-col">
-                            <div className="form-group checkbox-group span-3-col">
+                <div className="csp-form-section">
+                    <h4><Icons.Truck size={18} /> Supplier Settings</h4>
+                    <div className="csp-form-grid csp-grid-3">
+                        <div className="csp-field-group csp-checkbox csp-full-width">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="isSupplier"
-                                    checked={isSupplier === 'true'}
+                                    checked={isActiveValue(isSupplier)}
                                     onChange={e => handleCheckbox('isSupplier', e)}
                                     disabled={!canEdit}
                                 />
-                                <label htmlFor="isSupplier">Is a Supplier</label>
-                            </div>
-                            <div className="form-group checkbox-group">
+                                <span className="csp-checkbox-custom"></span>
+                                Is a Supplier
+                            </label>
+                        </div>
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="suppCreditActive"
-                                    checked={Supplierrcreditisactive === 'true'}
+                                    checked={isActiveValue(Supplierrcreditisactive)}
                                     onChange={e => handleCheckbox('Supplierrcreditisactive', e)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
+                                    disabled={!isActiveValue(isSupplier) || !canEdit}
                                 />
-                                <label htmlFor="suppCreditActive">Credit Active</label>
-                            </div>
-                            <div className="form-group">
-                                <label>Credit Days</label>
-                                <input
-                                    type="number"
-                                    value={Suppliercreditdays}
-                                    onChange={e => handleNumericInput('Suppliercreditdays', e.target.value)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Credit Limit</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={SupplierCreditLimit}
-                                    onChange={e => handleNumericInput('SupplierCreditLimit', e.target.value)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            <div className="form-group checkbox-group">
+                                <span className="csp-checkbox-custom"></span>
+                                Credit Active
+                            </label>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Credit Days</label>
+                            <input
+                                type="number"
+                                value={Suppliercreditdays}
+                                onChange={e => handleNumericInput('Suppliercreditdays', e.target.value)}
+                                disabled={!isActiveValue(isSupplier) || !canEdit}
+                                placeholder="0"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Credit Limit</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={SupplierCreditLimit}
+                                onChange={e => handleNumericInput('SupplierCreditLimit', e.target.value)}
+                                disabled={!isActiveValue(isSupplier) || !canEdit}
+                                placeholder="0.00"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="suppDiscount"
-                                    checked={SupplierisDiscount === 'true'}
+                                    checked={isActiveValue(SupplierisDiscount)}
                                     onChange={e => handleCheckbox('SupplierisDiscount', e)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
+                                    disabled={!isActiveValue(isSupplier) || !canEdit}
                                 />
-                                <label htmlFor="suppDiscount">Discount Active</label>
-                            </div>
-                            <div className="form-group">
-                                <label>Discount %</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={Supplierdiscountper}
-                                    onChange={e => handleNumericInput('Supplierdiscountper', e.target.value)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>GL Account Code *</label>
-                                <select
-                                    value={SupplierglCode}
-                                    onChange={e => handleInput('SupplierglCode', e.target.value)}
-                                    disabled={isSupplier !== 'true' || !canEdit}
-                                >
-                                    <option value="">Select GL Account</option>
-                                    {supplierGLAccounts.map(acc => (
-                                        <option key={acc.code} value={acc.code}>
-                                            {acc.code} - {acc.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                                <span className="csp-checkbox-custom"></span>
+                                Discount Active
+                            </label>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Discount %</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={Supplierdiscountper}
+                                onChange={e => handleNumericInput('Supplierdiscountper', e.target.value)}
+                                disabled={!isActiveValue(isSupplier) || !canEdit}
+                                placeholder="0.00"
+                                className="csp-form-input"
+                            />
+                        </div>
+                        <div className="csp-field-group">
+                            <label>GL Account Code *</label>
+                            <select
+                                value={SupplierglCode}
+                                onChange={e => handleInput('SupplierglCode', e.target.value)}
+                                disabled={!isActiveValue(isSupplier) || !canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select GL Account</option>
+                                {supplierGLAccounts.map(acc => (
+                                    <option key={acc.code} value={acc.code}>
+                                        {acc.code} - {acc.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
     );
 };
 
@@ -721,7 +863,7 @@ const CustomerSupplierProfileForm = ({
 const CustomerSupplierProfile = () => {
     const { credentials } = useAuth();
     const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
     const currentUser = credentials?.username || 'SYSTEM';
 
     const { data: profiles, lookupData, isLoading: isDataLoading, error, refetch, setError } = useDataService();
@@ -734,6 +876,11 @@ const CustomerSupplierProfile = () => {
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
     const [screenConfig, setScreenConfig] = useState(null);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(7);
+    const [paginatedProfiles, setPaginatedProfiles] = useState([]);
 
     // Load screen configuration
     useEffect(() => {
@@ -756,24 +903,72 @@ const CustomerSupplierProfile = () => {
         loadScreenConfig();
     }, []);
 
+    // Update paginated profiles
+    useEffect(() => {
+        const filtered = profiles.filter(p =>
+            normalizeValue(p.CustomerName).toLowerCase().includes(searchTerm.toLowerCase()) ||
+            normalizeValue(p.CustomerCode).includes(searchTerm)
+        );
+        
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        setPaginatedProfiles(filtered.slice(startIndex, endIndex));
+    }, [profiles, currentPage, itemsPerPage, searchTerm]);
+
+    // Reset page on search
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
+    // ✅ Fixed: Generate customer code with 10-digit format (0000000001)
+    const generateCustomerCode = () => {
+        // Filter profiles for current office only
+        const officeProfiles = profiles.filter(p => 
+            normalizeValue(p.offcode) === currentOffcode
+        );
+        
+        const existingCodes = officeProfiles
+            .map(p => {
+                const code = normalizeValue(p.CustomerCode);
+                // Try to parse as integer, but handle non-numeric codes
+                const parsed = parseInt(code, 10);
+                return isNaN(parsed) ? 0 : parsed;
+            })
+            .filter(code => code > 0);
+        
+        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
+        // Pad with leading zeros to make it 10 digits
+        const newCode = (maxCode + 1).toString().padStart(10, '0');
+        console.log('Generated new code:', newCode, 'from max:', maxCode); // For debugging
+        return newCode;
+    };
+
+    // Initialize form for new profile with auto-generated code
     useEffect(() => {
         if (currentMode === 'new') {
             const defaultCountryId = lookupData.countries[0]?.id || '1';
             const defaultCityId = lookupData.cities.find(c => c.countryId === defaultCountryId)?.id || '1';
+            
+            // Generate the code immediately for new profiles
+            const newCode = generateCustomerCode();
 
             setFormData(prev => ({
                 ...getInitialCustomerData(currentOffcode),
+                CustomerCode: newCode, // Set the generated code immediately
                 createdby: currentUser,
                 editby: currentUser,
                 CountryID: defaultCountryId,
                 CityID: defaultCityId,
+                country: lookupData.countries.find(c => c.id === defaultCountryId)?.name || 'Pakistan',
+                city: lookupData.cities.find(c => c.id === defaultCityId)?.name || 'LAHORE',
                 CustomerglCode: lookupData.glAccounts[0]?.code || '',
                 SupplierglCode: lookupData.glAccounts[0]?.code || '',
                 SaleManCode: lookupData.saleMen[0]?.code || ''
             }));
         }
-    }, [currentMode, currentOffcode, currentUser, lookupData]);
+    }, [currentMode, currentOffcode, currentUser, lookupData, profiles]);
 
+    // Load selected profile for editing
     useEffect(() => {
         if (selectedProfile && currentMode === 'edit') {
             const normalizedProfile = Object.keys(getInitialCustomerData()).reduce((acc, key) => {
@@ -812,12 +1007,6 @@ const CustomerSupplierProfile = () => {
         setMessage('Creating new profile...');
     };
 
-    const generateCustomerCode = () => {
-        const existingCodes = profiles.map(p => parseInt(normalizeValue(p.CustomerCode))).filter(code => !isNaN(code));
-        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
-        return (maxCode + 1).toString().padStart(10, '0');
-    };
-
     const handleSave = async () => {
         if (!hasPermission || !hasPermission(menuId, currentMode === 'new' ? 'add' : 'edit')) {
             setMessage(`⚠️ You do not have permission to ${currentMode === 'new' ? 'create' : 'edit'} profiles`);
@@ -829,15 +1018,10 @@ const CustomerSupplierProfile = () => {
             return;
         }
 
-        if (!formData.CustomerCode.trim()) {
-            setMessage('❌ Customer Code is required!');
+        // For new profiles, ensure we have a code (it should already be generated)
+        if (currentMode === 'new' && (!formData.CustomerCode || formData.CustomerCode.trim() === '')) {
+            setMessage('❌ Customer Code generation failed!');
             return;
-        }
-
-        let finalCustomerCode = formData.CustomerCode;
-        if (currentMode === 'new' && !finalCustomerCode.trim()) {
-            finalCustomerCode = generateCustomerCode();
-            handleFormChange('CustomerCode', finalCustomerCode);
         }
 
         setIsSaving(true);
@@ -845,17 +1029,12 @@ const CustomerSupplierProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
+        // Prepare data for database
+        const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
+
         const payload = {
             tableName: API_CONFIG.TABLES.CUSTOMER_SUPPLIER,
-            data: {
-                ...formData,
-                CustomerCode: finalCustomerCode,
-                offcode: currentOffcode,
-                editby: currentUser,
-                editdate: new Date().toISOString(),
-                createdby: currentMode === 'new' ? currentUser : formData.createdby,
-                createdate: currentMode === 'new' ? new Date().toISOString() : formData.createdate,
-            }
+            data: preparedData
         };
 
         if (currentMode === 'edit') {
@@ -883,9 +1062,11 @@ const CustomerSupplierProfile = () => {
                 await refetch();
 
                 if (currentMode === 'new') {
+                    // Find the newly created profile or use the one we just created
                     const newRecord = profiles.find(p =>
-                        p.CustomerCode === finalCustomerCode && p.offcode === currentOffcode
-                    ) || { ...formData, CustomerCode: finalCustomerCode };
+                        p.CustomerCode === formData.CustomerCode && p.offcode === currentOffcode
+                    ) || { ...formData };
+                    
                     setSelectedProfile(newRecord);
                     setCurrentMode('edit');
                 }
@@ -955,95 +1136,111 @@ const CustomerSupplierProfile = () => {
         }
     };
 
-    const CustomerProfileSidebar = () => {
-        const filteredProfiles = profiles.filter(p =>
-            normalizeValue(p.CustomerName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            normalizeValue(p.CustomerCode).includes(searchTerm)
-        );
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
 
+    const filteredCount = profiles.filter(p =>
+        normalizeValue(p.CustomerName).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        normalizeValue(p.CustomerCode).includes(searchTerm)
+    ).length;
+
+    const CustomerProfileSidebar = () => {
         return (
-            <aside className="sidebar">
-                <div className="sidebar-top">
-                    <div className="sidebar-title">
-                        <Icon.User className="big" />
-                        <div>
-                            <div className="h3">Customer/Supplier Profiles</div>
-                            <div className="muted small">{profiles.length} profiles • Office: {currentOffcode}</div>
+            <aside className="csp-sidebar">
+                <div className="csp-sidebar-header">
+                    <div className="csp-sidebar-title">
+                        <Icons.Users size={20} />
+                        <h3>Profiles</h3>
+                        <span className="csp-profile-count">{filteredCount} profiles</span>
+                    </div>
+                    <div className="csp-sidebar-actions">
+                        <div className="csp-search-container">
+                            <Icons.Search size={16} className="csp-search-icon" />
+                            <input
+                                type="text"
+                                placeholder="Search by code or name..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="csp-search-input"
+                            />
                         </div>
+                        <button
+                            className="csp-btn csp-btn-icon"
+                            onClick={refetch}
+                            disabled={isDataLoading}
+                            title="Refresh data"
+                        >
+                            <Icons.RefreshCw size={16} className={isDataLoading ? 'csp-spin' : ''} />
+                        </button>
                     </div>
-                    <div className="search-wrap">
-                        <Icon.Search className="search-icon" />
-                        <input
-                            type="text"
-                            placeholder="Search by code or name..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <button
-                        className="btn btn-icon"
-                        onClick={refetch}
-                        disabled={isDataLoading}
-                        title="Refresh data"
-                    >
-                        <Icon.Refresh className={isDataLoading ? 'spin' : ''} />
-                    </button>
                 </div>
 
-                <div className="sidebar-body">
+                <div className="csp-sidebar-content">
                     {isDataLoading && profiles.length === 0 ? (
-                        <div className="loading-message">
-                            <Icon.Loader className="spin" /> Loading Profiles...
+                        <div className="csp-loading-state">
+                            <Icons.Loader size={32} className="csp-spin" />
+                            <p>Loading Profiles...</p>
                         </div>
-                    ) : filteredProfiles.length > 0 ? (
-                        <div className="profile-list">
-                            {filteredProfiles.map(profile => (
-                                <div
-                                    key={`${profile.CustomerCode}-${profile.offcode}`}
-                                    className={`profile-item ${
-                                        selectedProfile?.CustomerCode === profile.CustomerCode && currentMode === 'edit' ? 'selected' : ''
-                                    }`}
-                                    onClick={() => handleSelectProfile(profile)}
-                                >
-                                    <div className="profile-main">
-                                        <div className="code-name">
-                                            <span className="code">{normalizeValue(profile.CustomerCode)}</span>
-                                            <span className="name">{normalizeValue(profile.CustomerName)}</span>
+                    ) : paginatedProfiles.length > 0 ? (
+                        <>
+                            <div className="csp-profile-list">
+                                {paginatedProfiles.map(profile => (
+                                    <div
+                                        key={`${profile.CustomerCode}-${profile.offcode}`}
+                                        className={`csp-profile-item ${
+                                            selectedProfile?.CustomerCode === profile.CustomerCode && currentMode === 'edit' ? 'csp-selected' : ''
+                                        }`}
+                                        onClick={() => handleSelectProfile(profile)}
+                                    >
+                                        <div className="csp-profile-info">
+                                            <div className="csp-profile-header">
+                                                <span className="csp-profile-code">{normalizeValue(profile.CustomerCode)}</span>
+                                                <span className="csp-profile-type-badge">
+                                                    {normalizeValue(profile.CustomerSupplierType)}
+                                                </span>
+                                            </div>
+                                            <div className="csp-profile-name">{normalizeValue(profile.CustomerName)}</div>
+                                            <div className="csp-profile-meta">
+                                                <span className={`csp-status-dot ${isActiveValue(profile.isactive) ? 'csp-active' : 'csp-inactive'}`} />
+                                                <span className="csp-status-text">
+                                                    {isActiveValue(profile.isactive) ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="profile-meta">
-                                            <span className={`type-badge ${normalizeValue(profile.CustomerSupplierType).toLowerCase().replace('/', '-')}`}>
-                                                {normalizeValue(profile.CustomerSupplierType)}
-                                            </span>
-                                            {normalizeValue(profile.isactive) === 'true' ? (
-                                                <span className="status active">Active</span>
-                                            ) : (
-                                                <span className="status inactive">Inactive</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {hasPermission && hasPermission(menuId, 'delete') && (
-                                        <div className="profile-actions">
+                                        {hasPermission && hasPermission(menuId, 'delete') && (
                                             <button
-                                                className="btn btn-icon btn-danger btn-sm"
+                                                className="csp-profile-delete"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleDeleteProfile(profile);
                                                 }}
                                                 title="Delete profile"
                                             >
-                                                <Icon.Trash width="16" height="16" />
+                                                <Icons.Trash2 size={14} />
                                             </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <Pagination
+                                currentPage={currentPage}
+                                totalItems={filteredCount}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                maxVisiblePages={3}
+                                loading={isDataLoading}
+                            />
+                        </>
                     ) : (
-                        <div className="empty-state">
-                            <Icon.User className="big-muted" />
-                            <div className="muted">No profiles found</div>
-                            {searchTerm && (
-                                <div className="small muted">Try a different search term</div>
+                        <div className="csp-empty-state">
+                            <Icons.UserCircle size={48} className="csp-empty-icon" />
+                            <h4>No profiles found</h4>
+                            {searchTerm ? (
+                                <p>Try a different search term</p>
+                            ) : (
+                                <p>Create your first profile to get started</p>
                             )}
                         </div>
                     )}
@@ -1054,94 +1251,112 @@ const CustomerSupplierProfile = () => {
 
     if (rightsLoading && !menuId) {
         return (
-            <div className="loading-container">
-                <Icon.Loader className="loader spin" />
+            <div className="csp-loading-container">
+                <Icons.Loader size={40} className="csp-spin" />
                 <p>Loading user rights...</p>
             </div>
         );
     }
 
     return (
-        <div className="cfa-page">
-            <div className="app-header">
-                <div className="header-brand">
-                    <Icon.User className="brand-icon" />
+        <div className="csp-container">
+            {/* Header */}
+            <header className="csp-header">
+                <div className="csp-header-left">
+                    <Icons.Users size={24} className="csp-header-icon" />
                     <div>
                         <h1>Customer & Supplier Management</h1>
-                        <div className="muted">Manage customer and supplier profiles</div>
+                        <span className="csp-header-subtitle">Manage customer and supplier profiles</span>
                     </div>
                 </div>
-                <div className="header-user">
-                    <Icon.Users className="icon-sm" />
+                <div className="csp-header-right">
+                    <Icons.User size={16} />
                     <span>{currentUser}</span>
+                    <span className="csp-office-tag">Office: {currentOffcode}</span>
                 </div>
-            </div>
+            </header>
 
-            <div className="toolbar">
-                <div className="toolbar-section">
+            {/* Toolbar */}
+            <div className="csp-toolbar">
+                <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
-                        <button className="toolbar-btn primary" onClick={handleSave} disabled={isSaving}>
-                            <Icon.Save /> {isSaving ? 'Saving...' : 'Save'}
+                        <button className="csp-toolbar-btn csp-primary" onClick={handleSave} disabled={isSaving}>
+                            {isSaving ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
+                            <span>{isSaving ? 'Saving...' : 'Save'}</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'add') && (
-                        <button className="toolbar-btn" onClick={handleNewProfile}>
-                            <Icon.Plus /> New Profile
+                        <button className="csp-toolbar-btn" onClick={handleNewProfile}>
+                            <Icons.Plus size={16} />
+                            <span>New Profile</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'edit') && (
-                        <button className="toolbar-btn" onClick={() => { 
-                            if (selectedProfile) { 
-                                setCurrentMode('edit'); 
-                            } else {
-                                setMessage('Select a profile to edit'); 
-                            }
-                        }}>
-                            <Icon.Edit /> Edit
+                        <button 
+                            className="csp-toolbar-btn" 
+                            onClick={() => { 
+                                if (selectedProfile) { 
+                                    setCurrentMode('edit'); 
+                                } else {
+                                    setMessage('Select a profile to edit'); 
+                                }
+                            }}
+                        >
+                            <Icons.Pencil size={16} />
+                            <span>Edit</span>
                         </button>
                     )}
                 </div>
 
-                <div className="toolbar-section">
-                    <button className="toolbar-btn" onClick={refetch}>
-                        <Icon.Refresh /> Refresh
+                <div className="csp-toolbar-group">
+                    <button className="csp-toolbar-btn" onClick={refetch}>
+                        <Icons.RefreshCw size={16} />
+                        <span>Refresh</span>
                     </button>
                 </div>
             </div>
 
+            {/* Error Toast */}
             {error && (
-                <div className="toast error">
-                    <div className="toast-content">
-                        <Icon.XCircle />
+                <div className="csp-toast csp-error">
+                    <div className="csp-toast-content">
+                        <Icons.AlertCircle size={18} />
                         <span>{error}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setError('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setError('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
 
+            {/* Message Toast */}
             {message && (
-                <div className={`toast ${message.includes('❌') ? 'error' : message.includes('⚠️') ? 'warning' : 'success'}`}>
-                    <div className="toast-content">
-                        {message.includes('✅') && <Icon.CheckCircle />}
-                        {message.includes('❌') && <Icon.XCircle />}
-                        {message.includes('⚠️') && <Icon.XCircle />}
+                <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
+                    <div className="csp-toast-content">
+                        {message.includes('✅') && <Icons.CheckCircle size={18} />}
+                        {message.includes('❌') && <Icons.AlertCircle size={18} />}
+                        {message.includes('⚠️') && <Icons.AlertTriangle size={18} />}
                         <span>{message.replace(/[✅❌⚠️]/g, '')}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setMessage('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setMessage('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
 
-            <div className="content-area">
+            {/* Main Content */}
+            <div className="csp-main-layout">
                 <CustomerProfileSidebar />
 
-                <div className="main-content">
-                    <div className="content-tabs">
-                        <button className="tab active">
-                            <Icon.User /> Profile Details
+                <main className="csp-content-area">
+                    <div className="csp-content-tabs">
+                        <button className="csp-tab csp-active">
+                            <Icons.User size={16} />
+                            Profile Details
                         </button>
                     </div>
 
-                    <div className="content-panel">
+                    <div className="csp-content-panel">
                         <CustomerSupplierProfileForm
                             formData={formData}
                             onFormChange={handleFormChange}
@@ -1154,7 +1369,7 @@ const CustomerSupplierProfile = () => {
                             menuId={menuId}
                         />
                     </div>
-                </div>
+                </main>
             </div>
         </div>
     );

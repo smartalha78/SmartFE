@@ -3,6 +3,8 @@ import "./ChartofAccount.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
 import API_BASE1 from "../../config";
+import * as Icons from 'lucide-react';
+import Pagination from '../Common/Pagination';
 
 /* ---------------------------
  * API & Configuration
@@ -26,27 +28,34 @@ const API_CONFIG = {
 const useAuth = () => useContext(AuthContext);
 
 /* ---------------------------
- * Utilities & Icons
+ * Utilities
 ---------------------------- */
 const normalizeValue = (value) => {
     if (value === null || value === undefined || value === 'null' || value === 'undefined') return '';
     return String(value);
 };
 
-const Icon = {
-    Save: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
-    Plus: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-    Edit: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-    Trash: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6M1 6h22"></path></svg>,
-    Search: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
-    Refresh: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6" /><path d="M21.02 12.8C20.45 18.05 16.94 22 12 22A9 9 0 0 1 3 13m1.27-5.8C4.55 3.95 7.84 2 12 2h.1C16.94 2 20.45 5.95 21.02 11.2" /></svg>,
-    MapPin: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
-    Globe: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>,
-    Loader: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="loader"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>,
-    CheckCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
-    XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
-    Users: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
-    ChevronDown: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
+const isActiveValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'boolean') return value === true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        return value === "true" || value === "1" || value === "True" || value === "TRUE";
+    }
+    return false;
+};
+
+// Format date to match database format (YYYY-MM-DD HH:MM:SS)
+const formatDateForDB = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
 /* ---------------------------
@@ -58,8 +67,40 @@ const getInitialCityData = (offcode = '0101') => ({
     RegionID: '1',
     CityName: '',
     IsActive: 'true',
-    offcode: offcode
+    offcode: offcode,
+    createdby: '',
+    createdate: new Date().toISOString().split('T')[0],
+    editby: '',
+    editdate: new Date().toISOString().split('T')[0]
 });
+
+// Prepare data for database insertion/update
+const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
+    const now = new Date();
+    const formattedNow = formatDateForDB(now);
+    
+    const preparedData = {
+        offcode: currentOffcode,
+        CountryID: data.CountryID || '',
+        CityID: data.CityID || '',
+        RegionID: data.RegionID || '1',
+        CityName: data.CityName || '',
+        IsActive: isActiveValue(data.IsActive) ? 'True' : 'False',
+        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
+        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
+        editby: currentUser,
+        editdate: formattedNow
+    };
+
+    // Remove any undefined values
+    Object.keys(preparedData).forEach(key => {
+        if (preparedData[key] === undefined) {
+            preparedData[key] = '';
+        }
+    });
+
+    return preparedData;
+};
 
 /* ---------------------------
  * Data Service Hook
@@ -81,7 +122,7 @@ const useCityDataService = () => {
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            return Array.isArray(data.rows) ? data.rows : [];
+            return data.success ? data.rows : [];
         } catch (err) {
             console.error(`Error fetching ${tableName}:`, err);
             return [];
@@ -151,6 +192,7 @@ const CityForm = ({
     } = formData;
 
     const handleInput = (field, value) => onFormChange(field, value);
+    const handleNumericInput = (field, value) => onFormChange(field, value.replace(/[^0-9]/g, ''));
     const handleCheckbox = (field, e) => onFormChange(field, e.target.checked ? 'true' : 'false');
 
     const isNewMode = currentMode === 'new';
@@ -158,35 +200,38 @@ const CityForm = ({
     const canEdit = hasPermission && hasPermission(menuId, isNewMode ? 'add' : 'edit');
 
     return (
-        <section className="detail-panel">
-            <div className="detail-header">
-                <div className="header-content">
-                    <h1>{isNewMode ? 'Add New City' : `City Details: ${CityName || 'City'}`}</h1>
-                    <div className="header-subtitle">
-                        <span className="mode-badge">{isNewMode ? 'NEW' : 'EDIT'}</span>
-                        <span className="muted">• {normalizeValue(CityID) || 'No ID'}</span>
-                        <span className="muted">• Office: {currentOffcode}</span>
+        <div className="csp-detail-panel">
+            <div className="csp-detail-header">
+                <div>
+                    <h2>{isNewMode ? 'Create New City' : `City: ${CityName || 'City'}`}</h2>
+                    <div className="csp-detail-meta">
+                        <span className={`csp-mode-badge ${isNewMode ? 'csp-new' : 'csp-edit'}`}>
+                            {isNewMode ? 'NEW' : 'EDIT'}
+                        </span>
+                        <span className="csp-code-badge">{CityID || (isNewMode ? 'Auto-generated' : 'No ID')}</span>
+                        <span className="csp-office-badge">Office: {currentOffcode}</span>
                         {selectedCountry && (
-                            <span className="muted">• Country: {selectedCountry.CountryName}</span>
+                            <span className="csp-office-badge">Country: {selectedCountry.CountryName}</span>
                         )}
-                        {!(IsActive === 'true') && <span className="inactive-badge">INACTIVE</span>}
+                        {!isActiveValue(IsActive) && <span className="csp-inactive-badge">INACTIVE</span>}
                     </div>
                 </div>
-                <div className="header-actions">
+                <div className="csp-detail-actions">
                     {canEdit && (
                         <>
                             <button
-                                className="btn btn-outline"
+                                className="csp-btn csp-btn-outline"
                                 onClick={onNewCity}
                             >
-                                <Icon.Plus /> New City
+                                <Icons.Plus size={16} />
+                                New City
                             </button>
                             <button
-                                className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+                                className={`csp-btn csp-btn-primary ${isLoading ? 'csp-loading' : ''}`}
                                 onClick={onSave}
                                 disabled={isLoading || !CityName?.trim() || !CountryID?.trim()}
                             >
-                                {isLoading ? <Icon.Loader className="spin" /> : <Icon.Save />}
+                                {isLoading ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
                                 {isLoading ? 'Saving...' : 'Save City'}
                             </button>
                         </>
@@ -194,84 +239,83 @@ const CityForm = ({
                 </div>
             </div>
 
-            <div className="detail-body">
-                <div className="form-section expanded">
-                    <div className="section-header">
-                        <div className="section-title">
-                            <Icon.MapPin />
-                            <h3>City Information</h3>
+            <div className="csp-detail-content">
+                <div className="csp-form-section">
+                    <h4><Icons.MapPin size={18} /> City Information</h4>
+                    <div className="csp-form-grid csp-grid-3">
+                        <div className="csp-field-group csp-required">
+                            <label>Country *</label>
+                            <select
+                                value={CountryID}
+                                onChange={e => handleInput('CountryID', e.target.value)}
+                                disabled={!canEdit}
+                                className="csp-form-select"
+                            >
+                                <option value="">Select Country</option>
+                                {countries.map(country => (
+                                    <option key={country.CountryID} value={country.CountryID}>
+                                        {country.CountryName}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-grid grid-3-col">
-                            <div className="form-group required">
-                                <label>Country *</label>
-                                <select
-                                    value={CountryID}
-                                    onChange={e => handleInput('CountryID', e.target.value)}
-                                    disabled={!canEdit}
-                                >
-                                    <option value="">Select Country</option>
-                                    {countries.map(country => (
-                                        <option key={country.CountryID} value={country.CountryID}>
-                                            {country.CountryName}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
 
-                            <div className="form-group required">
-                                <label>City Name *</label>
-                                <input
-                                    type="text"
-                                    value={CityName}
-                                    onChange={e => handleInput('CityName', e.target.value)}
-                                    placeholder="Enter city name"
-                                    disabled={!canEdit}
-                                />
-                            </div>
+                        <div className="csp-field-group csp-required">
+                            <label>City Name *</label>
+                            <input
+                                type="text"
+                                value={CityName}
+                                onChange={e => handleInput('CityName', e.target.value)}
+                                placeholder="Enter city name"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
 
-                            <div className="form-group">
-                                <label>City ID</label>
-                                <input
-                                    type="text"
-                                    value={CityID}
-                                    onChange={e => handleInput('CityID', e.target.value)}
-                                    placeholder={isNewMode ? "Auto-generated" : "City ID"}
-                                    disabled={!isNewMode || !canEdit}
-                                    className="mono"
-                                />
-                                {isNewMode && (
-                                    <div className="hint">ID will be auto-generated based on selected country</div>
-                                )}
-                            </div>
+                        <div className="csp-field-group">
+                            <label>City ID</label>
+                            <input
+                                type="text"
+                                value={CityID}
+                                onChange={e => handleInput('CityID', e.target.value)}
+                                placeholder={isNewMode ? "Auto-generated" : "City ID"}
+                                disabled={true}
+                                className="csp-form-input csp-disabled-field"
+                            />
+                            {isNewMode && (
+                                <small className="csp-field-hint">ID is auto-generated based on selected country</small>
+                            )}
+                        </div>
 
-                            <div className="form-group">
-                                <label>Region ID</label>
-                                <input
-                                    type="text"
-                                    value={RegionID}
-                                    onChange={e => handleInput('RegionID', e.target.value)}
-                                    placeholder="Region ID (e.g., 1)"
-                                    disabled={!canEdit}
-                                />
-                            </div>
+                        <div className="csp-field-group">
+                            <label>Region ID</label>
+                            <input
+                                type="text"
+                                value={RegionID}
+                                onChange={e => handleNumericInput('RegionID', e.target.value)}
+                                placeholder="Region ID (e.g., 1)"
+                                disabled={!canEdit}
+                                className="csp-form-input"
+                            />
+                        </div>
 
-                            <div className="form-group checkbox-group">
+                        <div className="csp-field-group csp-checkbox">
+                            <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
                                     id="IsActive"
-                                    checked={IsActive === 'true'}
+                                    checked={isActiveValue(IsActive)}
                                     onChange={e => handleCheckbox('IsActive', e)}
                                     disabled={!canEdit}
                                 />
-                                <label htmlFor="IsActive">City is Active</label>
-                            </div>
+                                <span className="csp-checkbox-custom"></span>
+                                City is Active
+                            </label>
                         </div>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
     );
 };
 
@@ -294,6 +338,11 @@ const CityProfile = () => {
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
     const [screenConfig, setScreenConfig] = useState(null);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+    const [paginatedCities, setPaginatedCities] = useState([]);
 
     // Load screen configuration
     useEffect(() => {
@@ -316,10 +365,9 @@ const CityProfile = () => {
         loadScreenConfig();
     }, []);
 
-    const selectedCountryIdForFilter = formData.CountryID;
-
+    // Filter cities based on selected country and search term
     const filteredCities = cities.filter(city => {
-        const matchesCountry = !selectedCountryIdForFilter || city.CountryID === selectedCountryIdForFilter;
+        const matchesCountry = !formData.CountryID || city.CountryID === formData.CountryID;
         const normalizedSearchTerm = searchTerm.toLowerCase();
         const matchesSearch = !normalizedSearchTerm || 
             normalizeValue(city.CityName).toLowerCase().includes(normalizedSearchTerm) ||
@@ -327,30 +375,34 @@ const CityProfile = () => {
         return matchesCountry && matchesSearch;
     });
 
-    const citiesByCountry = filteredCities.reduce((acc, city) => {
-        const countryId = city.CountryID;
-        if (!acc[countryId]) {
-            acc[countryId] = {
-                country: countries.find(c => c.CountryID === countryId),
-                cities: []
-            };
-        }
-        acc[countryId].cities.push(city);
-        return acc;
-    }, {});
+    // Update paginated cities
+    useEffect(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        setPaginatedCities(filteredCities.slice(startIndex, endIndex));
+    }, [filteredCities, currentPage, itemsPerPage]);
+
+    // Reset page when country changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [formData.CountryID, searchTerm]);
 
     const generateCityId = useCallback((countryId) => {
         if (!countryId) return '';
 
         const countryCities = cities.filter(c => c.CountryID === countryId);
-        const maxId = countryCities.reduce((max, c) => {
-            const id = parseInt(normalizeValue(c.CityID), 10);
-            return (id > max) ? id : max;
-        }, 0);
-
+        const existingCodes = countryCities
+            .map(c => {
+                const id = parseInt(normalizeValue(c.CityID), 10);
+                return isNaN(id) ? 0 : id;
+            })
+            .filter(id => id > 0);
+        
+        const maxId = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
         return (maxId + 1).toString();
     }, [cities]);
 
+    // Initialize form for new city
     useEffect(() => {
         if (currentMode === 'new') {
             const defaultCountryId = formData.CountryID || countries[0]?.CountryID || '';
@@ -359,25 +411,35 @@ const CityProfile = () => {
             setFormData(prev => ({
                 ...getInitialCityData(currentOffcode),
                 CountryID: defaultCountryId,
-                CityID: newCityId
+                CityID: newCityId,
+                createdby: currentUser,
+                editby: currentUser
             }));
-
-            if (defaultCountryId) {
-                const countryName = countries.find(c => c.CountryID === defaultCountryId)?.CountryName;
-                setMessage(`Ready to add new city for ${countryName}. Auto-generated ID: ${newCityId}`);
-            } else {
-                setMessage('Ready to add new city. Please select a country.');
-            }
         }
-    }, [currentMode, currentOffcode, countries, generateCityId]);
+    }, [currentMode, currentOffcode, currentUser, countries, generateCityId]);
+
+    // Load selected city for editing
+    useEffect(() => {
+        if (selectedCity && currentMode === 'edit') {
+            const normalizedCity = Object.keys(getInitialCityData()).reduce((acc, key) => {
+                acc[key] = normalizeValue(selectedCity[key] || getInitialCityData()[key]);
+                return acc;
+            }, {});
+
+            setFormData(normalizedCity);
+        }
+    }, [selectedCity, currentMode]);
 
     const handleFormChange = (field, value) => {
         setFormData(prev => {
             let newState = { ...prev, [field]: value };
+            
+            // Auto-generate City ID when country changes in new mode
             if (field === 'CountryID' && currentMode === 'new') {
                 const newCityId = generateCityId(value);
                 newState.CityID = newCityId;
             }
+            
             return newState;
         });
     };
@@ -387,13 +449,7 @@ const CityProfile = () => {
             setMessage('⚠️ You do not have permission to view cities');
             return;
         }
-        const normalizedCity = Object.keys(getInitialCityData()).reduce((acc, key) => {
-            acc[key] = normalizeValue(city[key] || getInitialCityData()[key]);
-            return acc;
-        }, {});
-        
         setSelectedCity(city);
-        setFormData(normalizedCity);
         setCurrentMode('edit');
         setMessage(`Editing: ${normalizeValue(city.CityName)}`);
     };
@@ -405,6 +461,7 @@ const CityProfile = () => {
         }
         setSelectedCity(null);
         setCurrentMode('new');
+        setMessage('Creating new city...');
     };
 
     const handleSave = async () => {
@@ -423,11 +480,7 @@ const CityProfile = () => {
             return;
         }
 
-        if (!formData.CityID.trim()) {
-            setMessage('❌ City ID is required!');
-            return;
-        }
-
+        // Check for duplicate city name in the same country
         const duplicateCity = cities.find(c => 
             c.CountryID === formData.CountryID && 
             normalizeValue(c.CityName).toLowerCase() === formData.CityName.toLowerCase() &&
@@ -444,15 +497,12 @@ const CityProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        const dataToSave = {
-            ...formData,
-            offcode: currentOffcode,
-            IsActive: formData.IsActive === 'true' ? 'true' : 'false'
-        };
+        // Prepare data for database
+        const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
             tableName: API_CONFIG.TABLES.CITIES,
-            data: dataToSave
+            data: preparedData
         };
 
         if (currentMode === 'edit') {
@@ -481,10 +531,15 @@ const CityProfile = () => {
                 await refetch();
 
                 if (currentMode === 'new') {
-                    setSelectedCity(dataToSave);
+                    // Find the newly created city
+                    const newCity = cities.find(c =>
+                        c.CityID === formData.CityID && 
+                        c.CountryID === formData.CountryID && 
+                        c.offcode === currentOffcode
+                    ) || { ...formData };
+                    
+                    setSelectedCity(newCity);
                     setCurrentMode('edit');
-                } else {
-                    setSelectedCity(dataToSave);
                 }
             } else {
                 setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
@@ -492,7 +547,7 @@ const CityProfile = () => {
 
         } catch (error) {
             console.error('Save error:', error);
-            setMessage(`❌ Error: Failed to communicate with server. ${error.message}`);
+            setMessage(`❌ Error: ${error.message}`);
         } finally {
             setIsSaving(false);
         }
@@ -546,123 +601,122 @@ const CityProfile = () => {
 
         } catch (error) {
             console.error('Delete error:', error);
-            setMessage(`❌ Error: Failed to communicate with server. ${error.message}`);
+            setMessage(`❌ Error: ${error.message}`);
         } finally {
             setIsSaving(false);
         }
     };
 
-    const CityManagementSidebar = () => {
-        const countryInFocus = countries.find(c => c.CountryID === selectedCountryIdForFilter);
-        const citiesForCountry = citiesByCountry[selectedCountryIdForFilter]?.cities || [];
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
 
+    const filteredCount = filteredCities.length;
+    const selectedCountry = countries.find(c => c.CountryID === formData.CountryID);
+
+    const CityManagementSidebar = () => {
         return (
-            <aside className="sidebar">
-                <div className="sidebar-top">
-                    <div className="sidebar-title">
-                        <Icon.MapPin className="big" />
-                        <div>
-                            <div className="h3">City Management</div>
-                            <div className="muted small">
-                                {cities.length} cities total • Office: {currentOffcode}
-                            </div>
-                        </div>
+            <aside className="csp-sidebar">
+                <div className="csp-sidebar-header">
+                    <div className="csp-sidebar-title">
+                        <Icons.MapPin size={20} />
+                        <h3>Cities</h3>
+                        <span className="csp-profile-count">
+                            {selectedCountry ? `${filteredCount} cities in ${selectedCountry.CountryName}` : `${filteredCount} cities`}
+                        </span>
                     </div>
-                    
-                    <div className="search-and-filter-bar">
-                        <div className="search-wrap full-width">
-                            <Icon.Search className="search-icon" />
+                    <div className="csp-sidebar-actions">
+                        <div className="csp-search-container">
+                            <Icons.Search size={16} className="csp-search-icon" />
                             <input
                                 type="text"
-                                placeholder="Search cities in current country..."
+                                placeholder="Search by name or ID..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
+                                className="csp-search-input"
                             />
                         </div>
-                        
                         <button
-                            className="btn btn-icon refresh-button"
+                            className="csp-btn csp-btn-icon"
                             onClick={refetch}
-                            disabled={isDataLoading || isSaving}
+                            disabled={isDataLoading}
                             title="Refresh data"
                         >
-                            <Icon.Refresh className={isDataLoading ? 'spin' : ''} />
+                            <Icons.RefreshCw size={16} className={isDataLoading ? 'csp-spin' : ''} />
                         </button>
                     </div>
                 </div>
 
-                <div className="sidebar-body">
-                    {countryInFocus ? (
-                        <div className="country-filter-display-header">
-                            <Icon.Globe className="country-icon" />
-                            <div className="country-name-in-filter-display">
-                                {countryInFocus.CountryName} Cities
-                                <span className="city-count-in-header"> ({citiesForCountry.length})</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="country-filter-display-header no-selection">
-                            <Icon.Globe className="country-icon" />
-                            <div className="country-name-in-filter-display">Select a Country in the Form to view cities</div>
-                        </div>
-                    )}
-                    
+                <div className="csp-sidebar-content">
                     {isDataLoading && cities.length === 0 ? (
-                        <div className="loading-message">
-                            <Icon.Loader className="spin" /> Loading Cities...
+                        <div className="csp-loading-state">
+                            <Icons.Loader size={32} className="csp-spin" />
+                            <p>Loading Cities...</p>
                         </div>
-                    ) : citiesForCountry.length > 0 ? (
-                        <div className="city-list">
-                            {Object.entries(citiesByCountry).map(([countryId, { cities: countryCities }]) => (
-                                <div key={countryId} className="cities-container">
-                                    {countryCities
-                                        .sort((a, b) => normalizeValue(a.CityName).localeCompare(normalizeValue(b.CityName)))
-                                        .map(city => (
-                                            <div
-                                                key={`${city.CountryID}-${city.CityID}`}
-                                                className={`city-item ${selectedCity?.CityID === city.CityID && selectedCity?.CountryID === city.CountryID && currentMode === 'edit' ? 'selected' : ''
-                                                    }`}
-                                                onClick={() => handleSelectCity(city)}
-                                            >
-                                                <div className="city-main">
-                                                    <div className="city-name-id">
-                                                        <span className="city-name">{normalizeValue(city.CityName)}</span>
-                                                        <span className="city-id">ID: {normalizeValue(city.CityID)}</span>
-                                                    </div>
-                                                    <div className="city-meta">
-                                                        {normalizeValue(city.IsActive) === 'true' ? (
-                                                            <span className="status active">Active</span>
-                                                        ) : (
-                                                            <span className="status inactive">Inactive</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {hasPermission && hasPermission(menuId, 'delete') && (
-                                                    <div className="city-actions">
-                                                        <button
-                                                            className="btn btn-icon btn-danger btn-sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteCity(city);
-                                                            }}
-                                                            disabled={isSaving}
-                                                            title="Delete city"
-                                                        >
-                                                            <Icon.Trash width="16" height="16" />
-                                                        </button>
-                                                    </div>
-                                                )}
+                    ) : paginatedCities.length > 0 ? (
+                        <>
+                            <div className="csp-profile-list">
+                                {paginatedCities.map(city => (
+                                    <div
+                                        key={`${city.CountryID}-${city.CityID}`}
+                                        className={`csp-profile-item ${
+                                            selectedCity?.CityID === city.CityID && 
+                                            selectedCity?.CountryID === city.CountryID && 
+                                            currentMode === 'edit' ? 'csp-selected' : ''
+                                        }`}
+                                        onClick={() => handleSelectCity(city)}
+                                    >
+                                        <div className="csp-profile-info">
+                                            <div className="csp-profile-header">
+                                                <span className="csp-profile-code">{normalizeValue(city.CityID)}</span>
+                                                <span className="csp-profile-type-badge">
+                                                    {countries.find(c => c.CountryID === city.CountryID)?.CountryName || 'Unknown'}
+                                                </span>
                                             </div>
-                                        ))}
-                                </div>
-                            ))}
-                        </div>
+                                            <div className="csp-profile-name">{normalizeValue(city.CityName)}</div>
+                                            <div className="csp-profile-meta">
+                                                <span className={`csp-status-dot ${isActiveValue(city.IsActive) ? 'csp-active' : 'csp-inactive'}`} />
+                                                <span className="csp-status-text">
+                                                    {isActiveValue(city.IsActive) ? 'Active' : 'Inactive'}
+                                                </span>
+                                                <span className="csp-region-badge">Region: {normalizeValue(city.RegionID)}</span>
+                                            </div>
+                                        </div>
+                                        {hasPermission && hasPermission(menuId, 'delete') && (
+                                            <button
+                                                className="csp-profile-delete"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCity(city);
+                                                }}
+                                                title="Delete city"
+                                            >
+                                                <Icons.Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <Pagination
+                                currentPage={currentPage}
+                                totalItems={filteredCount}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={handlePageChange}
+                                maxVisiblePages={3}
+                                loading={isDataLoading}
+                            />
+                        </>
                     ) : (
-                        <div className="empty-state">
-                            <Icon.MapPin className="big-muted" />
-                            <div className="muted">{countryInFocus ? `No cities found for ${countryInFocus.CountryName}` : 'No country selected or no data found.'}</div>
-                            {searchTerm && (
-                                <div className="small muted">Try clearing the search term.</div>
+                        <div className="csp-empty-state">
+                            <Icons.MapPin size={48} className="csp-empty-icon" />
+                            <h4>No cities found</h4>
+                            {searchTerm ? (
+                                <p>Try a different search term</p>
+                            ) : !formData.CountryID ? (
+                                <p>Select a country in the form to view cities</p>
+                            ) : (
+                                <p>Create your first city in this country to get started</p>
                             )}
                         </div>
                     )}
@@ -673,94 +727,112 @@ const CityProfile = () => {
 
     if (rightsLoading && !menuId) {
         return (
-            <div className="loading-container">
-                <Icon.Loader className="loader spin" />
+            <div className="csp-loading-container">
+                <Icons.Loader size={40} className="csp-spin" />
                 <p>Loading user rights...</p>
             </div>
         );
     }
 
     return (
-        <div className="cfa-page">
-            <div className="app-header">
-                <div className="header-brand">
-                    <Icon.MapPin className="brand-icon" />
+        <div className="csp-container">
+            {/* Header */}
+            <header className="csp-header">
+                <div className="csp-header-left">
+                    <Icons.MapPin size={24} className="csp-header-icon" />
                     <div>
                         <h1>City Management</h1>
-                        <div className="muted">Manage cities by country</div>
+                        <span className="csp-header-subtitle">Manage cities by country</span>
                     </div>
                 </div>
-                <div className="header-user">
-                    <Icon.Users className="icon-sm" />
+                <div className="csp-header-right">
+                    <Icons.User size={16} />
                     <span>{currentUser}</span>
+                    <span className="csp-office-tag">Office: {currentOffcode}</span>
                 </div>
-            </div>
+            </header>
 
-            <div className="toolbar">
-                <div className="toolbar-section">
+            {/* Toolbar */}
+            <div className="csp-toolbar">
+                <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
-                        <button className="toolbar-btn primary" onClick={handleSave} disabled={isSaving}>
-                            <Icon.Save /> {isSaving ? 'Saving...' : 'Save'}
+                        <button className="csp-toolbar-btn csp-primary" onClick={handleSave} disabled={isSaving}>
+                            {isSaving ? <Icons.Loader size={16} className="csp-spin" /> : <Icons.Save size={16} />}
+                            <span>{isSaving ? 'Saving...' : 'Save'}</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'add') && (
-                        <button className="toolbar-btn" onClick={handleNewCity}>
-                            <Icon.Plus /> New City
+                        <button className="csp-toolbar-btn" onClick={handleNewCity}>
+                            <Icons.Plus size={16} />
+                            <span>New City</span>
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'edit') && (
-                        <button className="toolbar-btn" onClick={() => { 
-                            if (selectedCity) { 
-                                setCurrentMode('edit'); 
-                            } else {
-                                setMessage('Select a city to edit'); 
-                            }
-                        }}>
-                            <Icon.Edit /> Edit
+                        <button 
+                            className="csp-toolbar-btn" 
+                            onClick={() => { 
+                                if (selectedCity) { 
+                                    setCurrentMode('edit'); 
+                                } else {
+                                    setMessage('Select a city to edit'); 
+                                }
+                            }}
+                        >
+                            <Icons.Pencil size={16} />
+                            <span>Edit</span>
                         </button>
                     )}
                 </div>
 
-                <div className="toolbar-section">
-                    <button className="toolbar-btn" onClick={refetch}>
-                        <Icon.Refresh /> Refresh
+                <div className="csp-toolbar-group">
+                    <button className="csp-toolbar-btn" onClick={refetch}>
+                        <Icons.RefreshCw size={16} />
+                        <span>Refresh</span>
                     </button>
                 </div>
             </div>
 
+            {/* Error Toast */}
             {error && (
-                <div className="toast error">
-                    <div className="toast-content">
-                        <Icon.XCircle />
+                <div className="csp-toast csp-error">
+                    <div className="csp-toast-content">
+                        <Icons.AlertCircle size={18} />
                         <span>{error}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setError('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setError('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
 
+            {/* Message Toast */}
             {message && (
-                <div className={`toast ${message.includes('❌') ? 'error' : message.includes('⚠️') ? 'warning' : 'success'}`}>
-                    <div className="toast-content">
-                        {message.includes('✅') && <Icon.CheckCircle />}
-                        {message.includes('❌') && <Icon.XCircle />}
-                        {message.includes('⚠️') && <Icon.XCircle />}
-                        <span>{message.replace(/[✅❌⚠️]/g, '').trim()}</span> 
+                <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
+                    <div className="csp-toast-content">
+                        {message.includes('✅') && <Icons.CheckCircle size={18} />}
+                        {message.includes('❌') && <Icons.AlertCircle size={18} />}
+                        {message.includes('⚠️') && <Icons.AlertTriangle size={18} />}
+                        <span>{message.replace(/[✅❌⚠️]/g, '')}</span>
                     </div>
-                    <button className="toast-close" onClick={() => setMessage('')}>×</button>
+                    <button className="csp-toast-close" onClick={() => setMessage('')}>
+                        <Icons.X size={14} />
+                    </button>
                 </div>
             )}
 
-            <div className="content-area">
+            {/* Main Content */}
+            <div className="csp-main-layout">
                 <CityManagementSidebar />
 
-                <div className="main-content">
-                    <div className="content-tabs">
-                        <button className="tab active">
-                            <Icon.MapPin /> City Details
+                <main className="csp-content-area">
+                    <div className="csp-content-tabs">
+                        <button className="csp-tab csp-active">
+                            <Icons.MapPin size={16} />
+                            City Details
                         </button>
                     </div>
 
-                    <div className="content-panel">
+                    <div className="csp-content-panel">
                         <CityForm
                             formData={formData}
                             onFormChange={handleFormChange}
@@ -773,7 +845,7 @@ const CityProfile = () => {
                             menuId={menuId}
                         />
                     </div>
-                </div>
+                </main>
             </div>
         </div>
     );
