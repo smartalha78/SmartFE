@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import "./ChartofAccount.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
@@ -28,7 +28,13 @@ const API_CONFIG = {
 /* ---------------------------
  * Auth Hook
 ---------------------------- */
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 /* ---------------------------
  * Utilities
@@ -62,7 +68,7 @@ const formatDateForDB = (date) => {
 };
 
 /* ---------------------------
- * Initial State
+ * Initial State (without audit fields)
 ---------------------------- */
 const getInitialLabourData = (offcode = '0101') => ({
     offcode: offcode,
@@ -84,18 +90,12 @@ const getInitialLabourData = (offcode = '0101') => ({
     LabourglCode: '',
     defaultTypePerAmt: '01',
     defaultAmount: '0',
-    LabourType: '01',
-    createdby: '',
-    createdate: new Date().toISOString().split('T')[0],
-    editby: '',
-    editdate: new Date().toISOString().split('T')[0]
+    LabourType: '01'
 });
 
-// Prepare data for database insertion/update
+// Prepare data for database insertion/update - WITHOUT audit fields
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    const now = new Date();
-    const formattedNow = formatDateForDB(now);
-    
+    // Create a clean object with only the fields that exist in the database
     const preparedData = {
         offcode: currentOffcode,
         LabourCode: data.LabourCode || '',
@@ -116,29 +116,28 @@ const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
         LabourglCode: data.LabourglCode || '',
         defaultTypePerAmt: data.defaultTypePerAmt || '01',
         defaultAmount: data.defaultAmount || '0',
-        LabourType: data.LabourType || '01',
-        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
-        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
-        editby: currentUser,
-        editdate: formattedNow
+        LabourType: data.LabourType || '01'
     };
 
     // Remove any undefined values
     Object.keys(preparedData).forEach(key => {
         if (preparedData[key] === undefined) {
-            preparedData[key] = '';
+            delete preparedData[key];
         }
     });
+
+    console.log('Prepared data for DB:', preparedData);
 
     return preparedData;
 };
 
 /* ---------------------------
- * Data Service
+ * Data Service with Server-Side Pagination
 ---------------------------- */
 const useLabourDataService = () => {
     const { credentials } = useAuth();
     const [labourData, setLabourData] = useState([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [lookupData, setLookupData] = useState({
         countries: [],
         cities: [],
@@ -147,61 +146,100 @@ const useLabourDataService = () => {
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(7);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [maxCode, setMaxCode] = useState(0);
 
-    const fetchTableData = async (tableName) => {
+    const fetchPaginatedData = useCallback(async (page, size, search) => {
+        setIsLoading(true);
+        setError('');
+
         try {
-            const payload = { tableName };
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+            
+            if (!currentOffcode) {
+                console.warn('No offcode found in credentials');
+                setLabourData([]);
+                setTotalCount(0);
+                setIsLoading(false);
+                return;
+            }
+
+            console.log(`Fetching labour for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}`);
+            
+            // Build where clause for search if needed
+            let whereClause = `offcode = '${currentOffcode}'`;
+            if (search) {
+                whereClause += ` AND (LabourCode LIKE '%${search}%' OR LabourName LIKE '%${search}%')`;
+            }
+            
+            const payload = { 
+                tableName: API_CONFIG.TABLES.LABOUR,
+                where: whereClause,
+                page: page,
+                limit: size,
+                usePagination: true
+            };
+
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            
             const data = await resp.json();
-            return data.success ? data.rows : [];
+            
+            if (data.success) {
+                setLabourData(data.rows || []);
+                setTotalCount(data.totalCount || 0);
+            } else {
+                setLabourData([]);
+                setTotalCount(0);
+            }
+
+            // Fetch lookup data separately (non-paginated)
+            await fetchLookupData(currentOffcode);
+
         } catch (err) {
-            console.error(`Error fetching ${tableName}:`, err);
-            return [];
+            console.error('Error fetching data:', err);
+            setError(`Failed to load data: ${err.message}`);
+            setLabourData([]);
+            setTotalCount(0);
+        } finally {
+            setIsLoading(false);
         }
-    };
+    }, [credentials]);
 
-    const loadAllData = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
-
+    const fetchLookupData = useCallback(async (offcode) => {
         try {
-            const currentOffcode = credentials?.company?.offcode || '0101';
-
             const [
-                labourData,
                 countryData,
                 cityData,
                 glAccountData,
-                branchData
+                branchData,
+                allLabourData
             ] = await Promise.all([
-                fetchTableData(API_CONFIG.TABLES.LABOUR),
-                fetchTableData(API_CONFIG.TABLES.COUNTRY),
-                fetchTableData(API_CONFIG.TABLES.CITY),
-                fetchTableData(API_CONFIG.TABLES.ACCOUNT),
-                fetchTableData(API_CONFIG.TABLES.BRANCH)
+                fetchTableData(API_CONFIG.TABLES.COUNTRY, offcode),
+                fetchTableData(API_CONFIG.TABLES.CITY, offcode),
+                fetchTableData(API_CONFIG.TABLES.ACCOUNT, offcode),
+                fetchTableData(API_CONFIG.TABLES.BRANCH, offcode),
+                fetchTableData(API_CONFIG.TABLES.LABOUR, offcode, false) // Get all labour for max code calculation
             ]);
 
-            const filteredLabour = labourData.filter(l =>
-                normalizeValue(l.offcode) === currentOffcode
-            );
-
             const filteredGLAccounts = glAccountData
-                .filter(acc => acc.code && acc.name && normalizeValue(acc.offcode) === currentOffcode)
+                .filter(acc => acc.code && acc.name)
                 .map(acc => ({
                     code: normalizeValue(acc.code),
                     name: normalizeValue(acc.name)
                 }));
 
             const currentBranch = branchData.find(b =>
-                normalizeValue(b.offcode) === currentOffcode
+                normalizeValue(b.offcode) === offcode
             );
 
-            setLabourData(filteredLabour);
             setLookupData({
                 countries: countryData.map(c => ({
                     id: normalizeValue(c.CountryID),
@@ -216,18 +254,85 @@ const useLabourDataService = () => {
                 branchData: currentBranch
             });
 
+            // Calculate max code from all labour records
+            const codes = allLabourData
+                .map(l => parseInt(normalizeValue(l.LabourCode), 10))
+                .filter(code => !isNaN(code) && code > 0);
+            
+            const max = codes.length > 0 ? Math.max(...codes) : 0;
+            setMaxCode(max);
+
         } catch (err) {
-            setError(`Failed to load data: ${err.message}`);
-        } finally {
-            setIsLoading(false);
+            console.error('Error fetching lookup data:', err);
         }
-    }, [credentials]);
+    }, []);
 
+    const fetchTableData = async (tableName, offcode, paginated = false) => {
+        try {
+            const whereClause = `offcode = '${offcode}'`;
+            const payload = { 
+                tableName,
+                where: whereClause,
+                usePagination: paginated
+            };
+            
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            return data.success ? data.rows : [];
+        } catch (err) {
+            console.error(`Error fetching ${tableName}:`, err);
+            return [];
+        }
+    };
+
+    // Load data whenever pagination or search changes
     useEffect(() => {
-        loadAllData();
-    }, [loadAllData]);
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
 
-    return { labourData, lookupData, isLoading, error, refetch: loadAllData, setError };
+    const refetch = useCallback(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
+
+    const goToPage = (page) => {
+        console.log(`Changing to page: ${page}`);
+        setCurrentPage(page);
+    };
+
+    const setSearch = (term) => {
+        setSearchTerm(term);
+        setCurrentPage(1);
+    };
+
+    const updatePageSize = (size) => {
+        setPageSize(size);
+        setCurrentPage(1);
+    };
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    return { 
+        labourData,
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        updatePageSize,
+        maxCode
+    };
 };
 
 /* ---------------------------
@@ -245,10 +350,10 @@ const LabourProfileForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
 
     const {
-        offcode, LabourCode, LabourName, isactive, contact, billaddress, zipcode,
+        LabourCode, LabourName, isactive, contact, billaddress, zipcode,
         CountryID, CityID, phone1, mobile, fax, email, paymentmethod,
         LabourglCode, defaultTypePerAmt, defaultAmount, LabourType
     } = formData;
@@ -469,7 +574,7 @@ const LabourProfileForm = ({
                             />
                         </div>
 
-                        <div className="csp-field-group csp-full-width">
+                        <div className="csp-field-group full-width">
                             <label>Address</label>
                             <input
                                 type="text"
@@ -591,25 +696,35 @@ const LabourProfileForm = ({
 ---------------------------- */
 const LabourProfile = () => {
     const { credentials } = useAuth();
-    const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const { hasPermission, loading: rightsLoading } = useRights();
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
     const currentUser = credentials?.username || 'SYSTEM';
+    const sidebarRef = useRef(null);
 
-    const { labourData, lookupData, isLoading: isDataLoading, error, refetch, setError } = useLabourDataService();
+    const { 
+        labourData,
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading: isDataLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        maxCode
+    } = useLabourDataService();
 
     const [selectedLabour, setSelectedLabour] = useState(null);
     const [formData, setFormData] = useState(() => getInitialLabourData(currentOffcode));
     const [currentMode, setCurrentMode] = useState('new');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
-    const [screenConfig, setScreenConfig] = useState(null);
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(7);
-    const [paginatedLabour, setPaginatedLabour] = useState([]);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
 
     // Load screen configuration
     useEffect(() => {
@@ -622,7 +737,6 @@ const LabourProfile = () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    setScreenConfig(data.screen);
                     setMenuId(data.screen.id);
                 }
             } catch (error) {
@@ -632,58 +746,43 @@ const LabourProfile = () => {
         loadScreenConfig();
     }, []);
 
-    // Filter and paginate labour
+    // Handle search with debounce
     useEffect(() => {
-        const filtered = labourData.filter(l =>
-            normalizeValue(l.LabourName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            normalizeValue(l.LabourCode).includes(searchTerm)
-        );
-        
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        setPaginatedLabour(filtered.slice(startIndex, endIndex));
-    }, [labourData, currentPage, itemsPerPage, searchTerm]);
+        const timer = setTimeout(() => {
+            if (localSearchTerm !== searchTerm) {
+                setSearch(localSearchTerm);
+            }
+        }, 500);
 
-    // Reset page on search
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+        return () => clearTimeout(timer);
+    }, [localSearchTerm, searchTerm, setSearch]);
 
+    // Generate labour code based on maxCode from all records (10-digit)
     const generateLabourCode = useCallback(() => {
-        if (labourData.length === 0) {
-            return '0000000001';
-        }
-
-        const existingCodes = labourData
-            .map(l => parseInt(normalizeValue(l.LabourCode), 10))
-            .filter(code => !isNaN(code) && code > 0);
-
-        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
         const nextCode = maxCode + 1;
-
         return nextCode.toString().padStart(10, '0');
-    }, [labourData]);
+    }, [maxCode]);
 
+    // Initialize form data for new record
     useEffect(() => {
-        if (currentMode === 'new') {
+        if (currentMode === 'new' && !selectedLabour) {
             const defaultCountryId = lookupData.countries[0]?.id || '1';
             const defaultCityId = lookupData.cities.find(c => c.countryId === defaultCountryId)?.id || '1';
             const newCode = generateLabourCode();
 
-            setFormData(prev => ({
+            setFormData({
                 ...getInitialLabourData(currentOffcode),
                 LabourCode: newCode,
                 CountryID: defaultCountryId,
                 CityID: defaultCityId,
                 country: lookupData.countries.find(c => c.id === defaultCountryId)?.name || 'Pakistan',
                 city: lookupData.cities.find(c => c.id === defaultCityId)?.name || 'LAHORE',
-                LabourglCode: lookupData.glAccounts[0]?.code || '',
-                createdby: currentUser,
-                editby: currentUser
-            }));
+                LabourglCode: lookupData.glAccounts[0]?.code || ''
+            });
         }
-    }, [currentMode, currentOffcode, currentUser, lookupData, generateLabourCode]);
+    }, [currentMode, currentOffcode, lookupData, generateLabourCode, selectedLabour]);
 
+    // Load selected labour data into form
     useEffect(() => {
         if (selectedLabour && currentMode === 'edit') {
             const normalizedLabour = Object.keys(getInitialLabourData()).reduce((acc, key) => {
@@ -743,7 +842,7 @@ const LabourProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database
+        // Prepare data for database - WITHOUT audit fields
         const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
@@ -758,6 +857,8 @@ const LabourProfile = () => {
             };
         }
 
+        console.log('Sending payload:', payload);
+
         try {
             const resp = await fetch(endpoint, {
                 method: 'POST',
@@ -766,21 +867,28 @@ const LabourProfile = () => {
             });
 
             if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
+                const errorText = await resp.text();
+                console.log('Error Response:', errorText);
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
             }
 
             const result = await resp.json();
+            console.log('Save result:', result);
 
             if (result.success) {
                 setMessage('✅ Labour saved successfully!');
                 await refetch();
 
                 if (currentMode === 'new') {
-                    const newRecord = labourData.find(l =>
-                        l.LabourCode === formData.LabourCode && l.offcode === currentOffcode
-                    ) || formData;
+                    // For new records, stay in edit mode with the new record selected
+                    const newRecord = {
+                        ...preparedData,
+                        LabourName: preparedData.LabourName
+                    };
+                    
                     setSelectedLabour(newRecord);
                     setCurrentMode('edit');
+                    setFormData(newRecord);
                 }
             } else {
                 setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
@@ -830,11 +938,16 @@ const LabourProfile = () => {
 
             if (result.success) {
                 setMessage('✅ Labour deleted successfully!');
-                await refetch();
+                
+                // Check if current page is now empty and we're not on page 1
+                if (labourData.length === 1 && currentPage > 1) {
+                    goToPage(currentPage - 1);
+                } else {
+                    await refetch();
+                }
 
                 if (selectedLabour && selectedLabour.LabourCode === labour.LabourCode) {
-                    setSelectedLabour(null);
-                    setCurrentMode('new');
+                    handleNewLabour();
                 }
             } else {
                 setMessage(`❌ Delete failed: ${result.message || 'Unknown error'}`);
@@ -849,13 +962,12 @@ const LabourProfile = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        console.log(`Page change requested to: ${page}`);
+        goToPage(page);
+        if (sidebarRef.current) {
+            sidebarRef.current.scrollTop = 0;
+        }
     };
-
-    const filteredCount = labourData.filter(l =>
-        normalizeValue(l.LabourName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        normalizeValue(l.LabourCode).includes(searchTerm)
-    ).length;
 
     const LabourProfileSidebar = () => {
         return (
@@ -864,7 +976,7 @@ const LabourProfile = () => {
                     <div className="csp-sidebar-title">
                         <Icons.User size={20} />
                         <h3>Labour</h3>
-                        <span className="csp-profile-count">{filteredCount} labour</span>
+                        <span className="csp-profile-count">{totalCount} labour</span>
                     </div>
                     <div className="csp-sidebar-actions">
                         <div className="csp-search-container">
@@ -872,8 +984,8 @@ const LabourProfile = () => {
                             <input
                                 type="text"
                                 placeholder="Search by code or name..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
+                                value={localSearchTerm}
+                                onChange={e => setLocalSearchTerm(e.target.value)}
                                 className="csp-search-input"
                             />
                         </div>
@@ -888,16 +1000,25 @@ const LabourProfile = () => {
                     </div>
                 </div>
 
-                <div className="csp-sidebar-content">
+                <div 
+                    className="csp-sidebar-content" 
+                    ref={sidebarRef}
+                    style={{
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        height: 'calc(100vh - 250px)',
+                        scrollBehavior: 'smooth'
+                    }}
+                >
                     {isDataLoading && labourData.length === 0 ? (
                         <div className="csp-loading-state">
                             <Icons.Loader size={32} className="csp-spin" />
                             <p>Loading Labour...</p>
                         </div>
-                    ) : paginatedLabour.length > 0 ? (
+                    ) : labourData.length > 0 ? (
                         <>
                             <div className="csp-profile-list">
-                                {paginatedLabour.map(labour => (
+                                {labourData.map(labour => (
                                     <div
                                         key={labour.LabourCode}
                                         className={`csp-profile-item ${selectedLabour?.LabourCode === labour.LabourCode && currentMode === 'edit' ? 'csp-selected' : ''
@@ -935,20 +1056,23 @@ const LabourProfile = () => {
                                 ))}
                             </div>
                             
-                            <Pagination
-                                currentPage={currentPage}
-                                totalItems={filteredCount}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                maxVisiblePages={3}
-                                loading={isDataLoading}
-                            />
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={handlePageChange}
+                                    totalItems={totalCount}
+                                    itemsPerPage={pageSize}
+                                    maxVisiblePages={5}
+                                    loading={isDataLoading}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="csp-empty-state">
                             <Icons.User size={48} className="csp-empty-icon" />
                             <h4>No labour found</h4>
-                            {searchTerm ? (
+                            {localSearchTerm ? (
                                 <p>Try a different search term</p>
                             ) : (
                                 <p>Create your first labour to get started</p>
@@ -971,7 +1095,6 @@ const LabourProfile = () => {
 
     return (
         <div className="csp-container">
-            {/* Header */}
             <header className="csp-header">
                 <div className="csp-header-left">
                     <Icons.User size={24} className="csp-header-icon" />
@@ -987,7 +1110,6 @@ const LabourProfile = () => {
                 </div>
             </header>
 
-            {/* Toolbar */}
             <div className="csp-toolbar">
                 <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
@@ -1024,7 +1146,6 @@ const LabourProfile = () => {
                 </div>
             </div>
 
-            {/* Error Toast */}
             {error && (
                 <div className="csp-toast csp-error">
                     <div className="csp-toast-content">
@@ -1037,7 +1158,6 @@ const LabourProfile = () => {
                 </div>
             )}
 
-            {/* Message Toast */}
             {message && (
                 <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
                     <div className="csp-toast-content">
@@ -1052,7 +1172,6 @@ const LabourProfile = () => {
                 </div>
             )}
 
-            {/* Main Content */}
             <div className="csp-main-layout">
                 <LabourProfileSidebar />
 

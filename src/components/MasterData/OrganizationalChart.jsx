@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
-import "./ChartofAccount.css";
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
+import "./CustomerSupplierProfile.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
 import API_BASE1 from "../../config";
@@ -24,7 +24,13 @@ const API_CONFIG = {
 /* ---------------------------
  * Auth Hook
 ---------------------------- */
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 /* ---------------------------
  * Utilities
@@ -60,100 +66,197 @@ const formatDateForDB = (date) => {
 /* ---------------------------
  * Initial State
 ---------------------------- */
-const getInitialOrgChartData = (offcode = '0101') => ({
+/* ---------------------------
+ * Initial State
+---------------------------- */
+const getInitialOrgChartData = (offcode = '') => ({
     code: '',
     name: '',
     parent: '00',
     nlevel: '1',
     isActive: 'true',
-    offcode: offcode,
-    createdby: '',
-    createdate: new Date().toISOString().split('T')[0],
-    editby: '',
-    editdate: new Date().toISOString().split('T')[0]
+    offcode: offcode
 });
 
-// Prepare data for database insertion/update
+// Prepare data for database insertion/update - FIXED VERSION
+// Prepare data for database insertion/update - FIXED VERSION
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    const now = new Date();
-    const formattedNow = formatDateForDB(now);
-    
+    // Create a clean object with only the fields that exist in the database
     const preparedData = {
-        offcode: currentOffcode,
         code: data.code || '',
         name: data.name || '',
         parent: data.parent || '00',
         nlevel: data.nlevel || '1',
         isActive: isActiveValue(data.isActive) ? 'True' : 'False',
-        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
-        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
-        editby: currentUser,
-        editdate: formattedNow
+        offcode: currentOffcode
     };
 
-    // Remove any undefined values
-    Object.keys(preparedData).forEach(key => {
-        if (preparedData[key] === undefined) {
-            preparedData[key] = '';
-        }
+    console.log('🔍 prepareDataForDB Output:', {
+        input: { data, mode, currentUser, currentOffcode },
+        output: preparedData
     });
 
     return preparedData;
 };
 
 /* ---------------------------
- * Data Service
+ * Data Service with Server-Side Pagination
 ---------------------------- */
 const useOrgChartDataService = () => {
     const { credentials } = useAuth();
     const [orgChartData, setOrgChartData] = useState([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [maxCode, setMaxCode] = useState(0);
 
-    const fetchTableData = async (tableName) => {
+    const fetchPaginatedData = useCallback(async (page, size, search) => {
+        setIsLoading(true);
+        setError('');
+
         try {
-            const payload = { tableName };
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+            
+            if (!currentOffcode) {
+                console.warn('No offcode found in credentials');
+                setOrgChartData([]);
+                setTotalCount(0);
+                setIsLoading(false);
+                return;
+            }
+
+            console.log(`Fetching data for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}`);
+            
+            let whereClause = `offcode = '${currentOffcode}'`;
+            if (search) {
+                whereClause += ` AND (code LIKE '%${search}%' OR name LIKE '%${search}%')`;
+            }
+            
+            const payload = { 
+                tableName: API_CONFIG.TABLES.ORG_CHART,
+                where: whereClause,
+                page: page,
+                limit: size,
+                usePagination: true
+            };
+
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            
             const data = await resp.json();
-            return data.success ? data.rows : [];
-        } catch (err) {
-            console.error(`Error fetching ${tableName}:`, err);
-            return [];
-        }
-    };
-
-    const loadAllData = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const currentOffcode = credentials?.company?.offcode || '0101';
-
-            const orgChartData = await fetchTableData(API_CONFIG.TABLES.ORG_CHART);
-
-            const filteredData = orgChartData.filter(item =>
-                normalizeValue(item.offcode) === currentOffcode
-            );
-
-            setOrgChartData(filteredData);
+            
+            if (data.success) {
+                setOrgChartData(data.rows || []);
+                setTotalCount(data.totalCount || 0);
+            } else {
+                setOrgChartData([]);
+                setTotalCount(0);
+            }
 
         } catch (err) {
+            console.error('Error fetching data:', err);
             setError(`Failed to load data: ${err.message}`);
+            setOrgChartData([]);
+            setTotalCount(0);
         } finally {
             setIsLoading(false);
         }
     }, [credentials]);
 
-    useEffect(() => {
-        loadAllData();
-    }, [loadAllData]);
+    const fetchMaxCode = useCallback(async (offcode) => {
+        // Don't fetch max code if we already have it
+        if (maxCode > 0) return;
+        
+        try {
+            const payload = {
+                tableName: API_CONFIG.TABLES.ORG_CHART,
+                where: `offcode = '${offcode}'`,
+                usePagination: false
+            };
 
-    return { orgChartData, isLoading, error, refetch: loadAllData, setError };
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            
+            const data = await resp.json();
+            
+            if (data.success && data.rows) {
+                const codes = data.rows
+                    .map(p => parseInt(normalizeValue(p.code), 10))
+                    .filter(code => !isNaN(code) && code > 0);
+                
+                const max = codes.length > 0 ? Math.max(...codes) : 0;
+                setMaxCode(max);
+                console.log('Max code set to:', max);
+            }
+        } catch (err) {
+            console.error('Error fetching max code:', err);
+        }
+    }, [maxCode]);
+
+    // Load data whenever pagination or search changes
+    useEffect(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
+
+    // Only fetch max code once when component mounts
+    useEffect(() => {
+        const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+        if (currentOffcode && maxCode === 0) {
+            fetchMaxCode(currentOffcode);
+        }
+    }, [credentials, maxCode, fetchMaxCode]);
+
+    const refetch = useCallback(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
+
+    const goToPage = (page) => {
+        console.log(`Changing to page: ${page}`);
+        setCurrentPage(page);
+    };
+
+    const setSearch = (term) => {
+        setSearchTerm(term);
+        setCurrentPage(1);
+    };
+
+    const updatePageSize = (size) => {
+        setPageSize(size);
+        setCurrentPage(1);
+    };
+
+    // Calculate total pages
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    return { 
+        orgChartData, 
+        totalCount,
+        totalPages,
+        isLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        updatePageSize,
+        maxCode
+    };
 };
 
 /* ---------------------------
@@ -170,7 +273,7 @@ const OrgChartForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
 
     const {
         code,
@@ -226,7 +329,7 @@ const OrgChartForm = ({
 
             <div className="csp-detail-content">
                 <div className="csp-form-section">
-                    <h4><Icons.GitBranch size={18} /> Position Information</h4>
+                    <h4><Icons.Users size={18} /> Position Information</h4>
                     <div className="csp-form-grid csp-grid-3">
                         <div className="csp-field-group csp-required">
                             <label>Position Code *</label>
@@ -236,7 +339,7 @@ const OrgChartForm = ({
                                 onChange={e => handleNumericInput('code', e.target.value)}
                                 placeholder="e.g., 001, 002"
                                 disabled={!isNewMode || !canEdit}
-                                className="csp-form-input"
+                                className="csp-form-input csp-disabled-field"
                             />
                             {isNewMode && (
                                 <small className="csp-field-hint">Enter a unique 3-digit code (001, 002, etc.)</small>
@@ -290,7 +393,7 @@ const OrgChartForm = ({
                 </div>
 
                 <div className="csp-form-section">
-                    <h4><Icons.GitBranch size={18} /> Hierarchy Information Preview</h4>
+                    <h4><Icons.GitMerge size={18} /> Hierarchy Information Preview</h4>
                     <div className="csp-form-grid csp-grid-1">
                         <div className="csp-hierarchy-preview">
                             <div className="csp-hierarchy-item">
@@ -315,25 +418,35 @@ const OrgChartForm = ({
 ---------------------------- */
 const OrganizationChart = () => {
     const { credentials } = useAuth();
-    const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
+    const { hasPermission, loading: rightsLoading } = useRights();
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
     const currentUser = credentials?.username || 'SYSTEM';
+    const sidebarRef = useRef(null);
 
-    const { orgChartData, isLoading: isDataLoading, error, refetch, setError } = useOrgChartDataService();
+    const { 
+        orgChartData, 
+        totalCount,
+        totalPages,
+        isLoading: isDataLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        updatePageSize,
+        maxCode
+    } = useOrgChartDataService();
 
     const [selectedPosition, setSelectedPosition] = useState(null);
     const [formData, setFormData] = useState(() => getInitialOrgChartData(currentOffcode));
     const [currentMode, setCurrentMode] = useState('new');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
-    const [screenConfig, setScreenConfig] = useState(null);
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
-    const [paginatedPositions, setPaginatedPositions] = useState([]);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
 
     // Load screen configuration
     useEffect(() => {
@@ -346,7 +459,6 @@ const OrganizationChart = () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    setScreenConfig(data.screen);
                     setMenuId(data.screen.id);
                 }
             } catch (error) {
@@ -356,59 +468,34 @@ const OrganizationChart = () => {
         loadScreenConfig();
     }, []);
 
-    // Filter positions based on search term
-    const filteredPositions = orgChartData.filter(position => {
-        const normalizedSearchTerm = searchTerm.toLowerCase();
-        return !searchTerm ||
-            normalizeValue(position.name).toLowerCase().includes(normalizedSearchTerm) ||
-            normalizeValue(position.code).includes(normalizedSearchTerm);
-    });
-
-    // Sort positions by code
-    const sortedPositions = [...filteredPositions].sort((a, b) =>
-        normalizeValue(a.code).localeCompare(normalizeValue(b.code))
-    );
-
-    // Update paginated positions
+    // Handle search with debounce
     useEffect(() => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        setPaginatedPositions(sortedPositions.slice(startIndex, endIndex));
-    }, [sortedPositions, currentPage, itemsPerPage]);
+        const timer = setTimeout(() => {
+            if (localSearchTerm !== searchTerm) {
+                setSearch(localSearchTerm);
+            }
+        }, 500);
 
-    // Reset page on search
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+        return () => clearTimeout(timer);
+    }, [localSearchTerm, searchTerm, setSearch]);
 
+    // Generate next code based on maxCode from all records
     const generateNextCode = useCallback(() => {
-        if (orgChartData.length === 0) {
-            return '001';
-        }
-
-        const existingCodes = orgChartData
-            .map(p => parseInt(normalizeValue(p.code), 10))
-            .filter(code => !isNaN(code) && code > 0);
-
-        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
         const nextCode = maxCode + 1;
-
         return nextCode.toString().padStart(3, '0');
-    }, [orgChartData]);
+    }, [maxCode]);
 
     // Initialize form for new position
     useEffect(() => {
-        if (currentMode === 'new') {
+        if (currentMode === 'new' && !selectedPosition) {
             const newCode = generateNextCode();
-
-            setFormData(prev => ({
+            
+            setFormData({
                 ...getInitialOrgChartData(currentOffcode),
-                code: newCode,
-                createdby: currentUser,
-                editby: currentUser
-            }));
+                code: newCode
+            });
         }
-    }, [currentMode, currentOffcode, currentUser, generateNextCode]);
+    }, [currentMode, currentOffcode, generateNextCode, selectedPosition]);
 
     // Load selected position for editing
     useEffect(() => {
@@ -449,90 +536,112 @@ const OrganizationChart = () => {
         setMessage('Creating new position...');
     };
 
-    const handleSave = async () => {
-        if (!hasPermission || !hasPermission(menuId, currentMode === 'new' ? 'add' : 'edit')) {
-            setMessage(`⚠️ You do not have permission to ${currentMode === 'new' ? 'create' : 'edit'} positions`);
-            return;
-        }
+ const handleSave = async () => {
+    if (!hasPermission || !hasPermission(menuId, currentMode === 'new' ? 'add' : 'edit')) {
+        setMessage(`⚠️ You do not have permission to ${currentMode === 'new' ? 'create' : 'edit'} positions`);
+        return;
+    }
 
-        if (!formData.name.trim()) {
-            setMessage('❌ Position Name is required!');
-            return;
-        }
+    if (!formData.name.trim()) {
+        setMessage('❌ Position Name is required!');
+        return;
+    }
 
-        if (!formData.code.trim()) {
-            setMessage('❌ Position Code is required!');
-            return;
-        }
+    if (!formData.code.trim()) {
+        setMessage('❌ Position Code is required!');
+        return;
+    }
 
-        // Check for duplicate code
-        const duplicateCode = orgChartData.find(p =>
-            p.code === formData.code &&
-            (currentMode === 'new' || p.code !== selectedPosition?.code)
-        );
+    // Check for duplicate code in current page data
+    const duplicateCode = orgChartData.find(p =>
+        p.code === formData.code &&
+        (currentMode === 'new' || p.code !== selectedPosition?.code)
+    );
 
-        if (duplicateCode) {
-            setMessage('❌ A position with this code already exists!');
-            return;
-        }
+    if (duplicateCode) {
+        setMessage('❌ A position with this code already exists!');
+        return;
+    }
 
-        setIsSaving(true);
-        setMessage('');
+    setIsSaving(true);
+    setMessage('');
 
-        const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
+    const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database
-        const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
+    // Prepare data for database - WITHOUT audit fields
+    const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
-        const payload = {
-            tableName: API_CONFIG.TABLES.ORG_CHART,
-            data: preparedData
-        };
-
-        if (currentMode === 'edit') {
-            payload.where = {
-                code: formData.code,
-                offcode: currentOffcode
-            };
-        }
-
-        try {
-            const resp = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
-            }
-
-            const result = await resp.json();
-
-            if (result.success) {
-                setMessage('✅ Position saved successfully!');
-                await refetch();
-
-                if (currentMode === 'new') {
-                    // Find the newly created position
-                    const newRecord = orgChartData.find(p =>
-                        p.code === formData.code && p.offcode === currentOffcode
-                    ) || { ...formData };
-                    
-                    setSelectedPosition(newRecord);
-                    setCurrentMode('edit');
-                }
-            } else {
-                setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
-            }
-
-        } catch (error) {
-            console.error('Save error:', error);
-            setMessage(`❌ Error: ${error.message}`);
-        } finally {
-            setIsSaving(false);
-        }
+    // Create payload based on the working example from your logs
+    const payload = {
+        tableName: API_CONFIG.TABLES.ORG_CHART,
+        data: preparedData
     };
+
+    // For update, add where clause
+    if (currentMode === 'edit') {
+        payload.where = {
+            code: formData.code,
+            offcode: currentOffcode
+        };
+    }
+
+    console.log('========== INSERT/UPDATE DEBUG ==========');
+    console.log('Endpoint:', endpoint);
+    console.log('Full Payload:', JSON.stringify(payload, null, 2));
+    console.log('=========================================');
+
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        console.log('Response Status:', resp.status);
+
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            console.log('Error Response Body:', errorText);
+            throw new Error(`HTTP ${resp.status}: ${errorText}`);
+        }
+
+        const result = await resp.json();
+        console.log('Success Response:', result);
+
+        if (result.success) {
+            setMessage('✅ Position saved successfully!');
+            
+            // Refresh the data
+            await refetch();
+
+            if (currentMode === 'new') {
+                // For new records, stay in edit mode with the new record selected
+                const newRecord = {
+                    code: preparedData.code,
+                    name: preparedData.name,
+                    parent: preparedData.parent,
+                    nlevel: preparedData.nlevel,
+                    isActive: preparedData.isActive,
+                    offcode: preparedData.offcode
+                };
+                
+                setSelectedPosition(newRecord);
+                setCurrentMode('edit');
+                
+                // Update form data with the saved record
+                setFormData(newRecord);
+            }
+        } else {
+            setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Save error:', error);
+        setMessage(`❌ Error: ${error.message}`);
+    } finally {
+        setIsSaving(false);
+    }
+};
 
     const handleDeletePosition = async (position) => {
         if (!hasPermission || !hasPermission(menuId, 'delete')) {
@@ -570,7 +679,13 @@ const OrganizationChart = () => {
 
             if (result.success) {
                 setMessage('✅ Position deleted successfully!');
-                await refetch();
+                
+                // Check if current page is now empty and we're not on page 1
+                if (orgChartData.length === 1 && currentPage > 1) {
+                    goToPage(currentPage - 1);
+                } else {
+                    await refetch();
+                }
 
                 if (selectedPosition && selectedPosition.code === position.code) {
                     handleNewPosition();
@@ -588,19 +703,21 @@ const OrganizationChart = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        console.log(`Page change requested to: ${page}`);
+        goToPage(page);
+        if (sidebarRef.current) {
+            sidebarRef.current.scrollTop = 0;
+        }
     };
-
-    const filteredCount = filteredPositions.length;
 
     const OrgChartSidebar = () => {
         return (
             <aside className="csp-sidebar">
                 <div className="csp-sidebar-header">
                     <div className="csp-sidebar-title">
-                        <Icons.GitBranch size={20} />
+                        <Icons.Users size={20} />
                         <h3>Positions</h3>
-                        <span className="csp-profile-count">{filteredCount} positions</span>
+                        <span className="csp-profile-count">{totalCount} positions</span>
                     </div>
                     <div className="csp-sidebar-actions">
                         <div className="csp-search-container">
@@ -608,8 +725,8 @@ const OrganizationChart = () => {
                             <input
                                 type="text"
                                 placeholder="Search by code or name..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
+                                value={localSearchTerm}
+                                onChange={e => setLocalSearchTerm(e.target.value)}
                                 className="csp-search-input"
                             />
                         </div>
@@ -624,12 +741,21 @@ const OrganizationChart = () => {
                     </div>
                 </div>
 
-                <div className="csp-sidebar-content">
+                <div 
+                    className="csp-sidebar-content" 
+                    ref={sidebarRef}
+                    style={{
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        height: 'calc(100vh - 250px)',
+                        scrollBehavior: 'smooth'
+                    }}
+                >
                     <div className="csp-level-section">
                         <div className="csp-level-header">
                             <Icons.Users size={16} />
                             <span>All Root Positions (Level 1)</span>
-                            <span className="csp-position-count">({filteredCount})</span>
+                            <span className="csp-position-count">({totalCount})</span>
                         </div>
                     </div>
 
@@ -638,10 +764,10 @@ const OrganizationChart = () => {
                             <Icons.Loader size={32} className="csp-spin" />
                             <p>Loading Positions...</p>
                         </div>
-                    ) : paginatedPositions.length > 0 ? (
+                    ) : orgChartData.length > 0 ? (
                         <>
                             <div className="csp-profile-list">
-                                {paginatedPositions.map(position => (
+                                {orgChartData.map(position => (
                                     <div
                                         key={position.code}
                                         className={`csp-profile-item ${
@@ -681,20 +807,23 @@ const OrganizationChart = () => {
                                 ))}
                             </div>
                             
-                            <Pagination
-                                currentPage={currentPage}
-                                totalItems={filteredCount}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                maxVisiblePages={3}
-                                loading={isDataLoading}
-                            />
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={handlePageChange}
+                                    totalItems={totalCount}
+                                    itemsPerPage={pageSize}
+                                    maxVisiblePages={5}
+                                    loading={isDataLoading}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="csp-empty-state">
-                            <Icons.GitBranch size={48} className="csp-empty-icon" />
+                            <Icons.Users size={48} className="csp-empty-icon" />
                             <h4>No positions found</h4>
-                            {searchTerm ? (
+                            {localSearchTerm ? (
                                 <p>Try a different search term</p>
                             ) : (
                                 <p>Create your first position to get started</p>
@@ -717,10 +846,9 @@ const OrganizationChart = () => {
 
     return (
         <div className="csp-container">
-            {/* Header */}
             <header className="csp-header">
                 <div className="csp-header-left">
-                    <Icons.GitBranch size={24} className="csp-header-icon" />
+                    <Icons.Users size={24} className="csp-header-icon" />
                     <div>
                         <h1>Organization Chart</h1>
                         <span className="csp-header-subtitle">Manage organizational positions and hierarchy</span>
@@ -733,7 +861,6 @@ const OrganizationChart = () => {
                 </div>
             </header>
 
-            {/* Toolbar */}
             <div className="csp-toolbar">
                 <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
@@ -773,7 +900,6 @@ const OrganizationChart = () => {
                 </div>
             </div>
 
-            {/* Error Toast */}
             {error && (
                 <div className="csp-toast csp-error">
                     <div className="csp-toast-content">
@@ -786,7 +912,6 @@ const OrganizationChart = () => {
                 </div>
             )}
 
-            {/* Message Toast */}
             {message && (
                 <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
                     <div className="csp-toast-content">
@@ -801,14 +926,13 @@ const OrganizationChart = () => {
                 </div>
             )}
 
-            {/* Main Content */}
             <div className="csp-main-layout">
                 <OrgChartSidebar />
 
                 <main className="csp-content-area">
                     <div className="csp-content-tabs">
                         <button className="csp-tab csp-active">
-                            <Icons.GitBranch size={16} />
+                            <Icons.Users size={16} />
                             Position Details
                         </button>
                     </div>

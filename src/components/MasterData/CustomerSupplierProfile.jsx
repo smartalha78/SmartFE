@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import "./CustomerSupplierProfile.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
@@ -32,7 +32,13 @@ const API_CONFIG = {
 /* ---------------------------
  * Auth Hook
 ---------------------------- */
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 /* ---------------------------
  * Utilities
@@ -42,7 +48,7 @@ const normalizeValue = (value) => {
     return String(value);
 };
 
-// ✅ Helper function to check if a value represents "active"
+// Helper function to check if a value represents "active"
 const isActiveValue = (value) => {
     if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value === true;
@@ -66,107 +72,122 @@ const formatDateForDB = (date) => {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
-// Prepare data for database insertion/update
+// Convert numeric code to 10-digit format with leading zeros
+const formatCode = (num) => {
+    return num.toString().padStart(10, '0');
+};
+
+// Extract numeric value from code (remove leading zeros)
+const getNumericCode = (code) => {
+    if (!code) return 0;
+    // Remove leading zeros and convert to number
+    const numericStr = code.replace(/^0+/, '');
+    return numericStr === '' ? 0 : parseInt(numericStr, 10);
+};
+
+// Prepare data for database insertion/update - COMPLETELY WITHOUT audit fields
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    const now = new Date();
-    const formattedNow = formatDateForDB(now);
-    
-    // Base data with all required fields
+    // Helper function to convert empty strings to null for optional fields
+    const toDBValue = (value) => {
+        if (value === undefined || value === '') return null;
+        return value;
+    };
+
+    // Base data with ONLY the fields that exist in the database
+    // NO createdby, createdate, editby, editdate fields
     const preparedData = {
         offcode: currentOffcode,
         CustomerCode: data.CustomerCode || '',
         CustomerName: data.CustomerName || '',
-        CustomerNameAR: data.CustomerNameAR || '',
-        SHD: data.SHD || '',
+        CustomerNameAR: toDBValue(data.CustomerNameAR),
+        SHD: toDBValue(data.SHD),
         isactive: isActiveValue(data.isactive) ? 'True' : 'False',
-        billaddress: data.billaddress || '',
-        billaddressAR: data.billaddressAR || '',
-        zipcode: data.zipcode || '',
+        billaddress: toDBValue(data.billaddress),
+        billaddressAR: toDBValue(data.billaddressAR),
+        zipcode: toDBValue(data.zipcode),
         CountryID: data.CountryID || '1',
         country: data.country || 'Pakistan',
         CityID: data.CityID || '1',
         city: data.city || 'LAHORE',
-        phone1: data.phone1 || '',
+        phone1: toDBValue(data.phone1),
         mobile: data.mobile || '0',
-        fax: data.fax || '',
-        email: data.email || '',
+        fax: toDBValue(data.fax),
+        email: toDBValue(data.email),
         type: data.type || '1',
-        IsSalesTax: data.IsSalesTax === 'true' ? 'True' : 'False',
+        IsSalesTax: isActiveValue(data.IsSalesTax) ? 'True' : 'False',
         SalesTaxNo: data.SalesTaxNo || '----',
-        SalesTaxNoAR: data.SalesTaxNoAR || '',
-        isCustomer: data.isCustomer === 'true' ? 'True' : 'False',
-        Customercreditisactive: data.Customercreditisactive === 'true' ? 'True' : 'False',
+        SalesTaxNoAR: toDBValue(data.SalesTaxNoAR),
+        isCustomer: isActiveValue(data.isCustomer) ? 'True' : 'False',
+        Customercreditisactive: isActiveValue(data.Customercreditisactive) ? 'True' : 'False',
         Customercreditdays: data.Customercreditdays || '0',
-        CustomerisDiscount: data.CustomerisDiscount === 'true' ? 'True' : 'False',
+        CustomerisDiscount: isActiveValue(data.CustomerisDiscount) ? 'True' : 'False',
         Customerdiscountper: data.Customerdiscountper || '0.00',
-        CustomerglCode: data.CustomerglCode || '',
+        CustomerglCode: toDBValue(data.CustomerglCode),
         CustomerCreditLimit: data.CustomerCreditLimit || '0.00',
-        isSupplier: data.isSupplier === 'true' ? 'True' : 'False',
-        Supplierrcreditisactive: data.Supplierrcreditisactive === 'true' ? 'True' : 'False',
+        isSupplier: isActiveValue(data.isSupplier) ? 'True' : 'False',
+        Supplierrcreditisactive: isActiveValue(data.Supplierrcreditisactive) ? 'True' : 'False',
         Suppliercreditdays: data.Suppliercreditdays || '0',
-        SupplierisDiscount: data.SupplierisDiscount === 'true' ? 'True' : 'False',
+        SupplierisDiscount: isActiveValue(data.SupplierisDiscount) ? 'True' : 'False',
         Supplierdiscountper: data.Supplierdiscountper || '0.00',
-        SupplierglCode: data.SupplierglCode || '',
+        SupplierglCode: toDBValue(data.SupplierglCode),
         SupplierCreditLimit: data.SupplierCreditLimit || '0.00',
-        SaleManCode: data.SaleManCode || '',
-        isNTN: data.isNTN === 'true' ? 'True' : 'False',
+        SaleManCode: toDBValue(data.SaleManCode),
+        isNTN: isActiveValue(data.isNTN) ? 'True' : 'False',
         NTN: data.NTN || '-',
         CNIC: data.CNIC || '0',
-        ST1: data.ST1 || '',
-        ST2: data.ST2 || '',
-        ST3: data.ST3 || '',
-        ST4: data.ST4 || '',
-        ST5: data.ST5 || '',
-        CustomeralternativeCode: data.CustomeralternativeCode || '',
-        SupplieralternativeCode: data.SupplieralternativeCode || '',
-        PartyVendorCode: data.PartyVendorCode || '',
-        PartyCustomerCode: data.PartyCustomerCode || '',
+        ST1: toDBValue(data.ST1),
+        ST2: toDBValue(data.ST2),
+        ST3: toDBValue(data.ST3),
+        ST4: toDBValue(data.ST4),
+        ST5: toDBValue(data.ST5),
+        CustomeralternativeCode: toDBValue(data.CustomeralternativeCode),
+        SupplieralternativeCode: toDBValue(data.SupplieralternativeCode),
+        PartyVendorCode: toDBValue(data.PartyVendorCode),
+        PartyCustomerCode: toDBValue(data.PartyCustomerCode),
         PackageId: data.PackageId || '1',
         PerMonthFee: data.PerMonthFee || '700',
-        PackageDate: data.PackageDate ? formatDateForDB(data.PackageDate) : formatDateForDB(now),
+        PackageDate: data.PackageDate ? formatDateForDB(data.PackageDate) : formatDateForDB(new Date()),
         SectorCode: data.SectorCode || '000001',
-        isAcCreate: data.isAcCreate === 'true' ? 'True' : 'False',
+        isAcCreate: isActiveValue(data.isAcCreate) ? 'True' : 'False',
         PackageTotalAmount: data.PackageTotalAmount || '0',
         PackageDownAmount: data.PackageDownAmount || '0',
         PackageBalanceAmount: data.PackageBalanceAmount || '0',
         PackageNoofInstallment: data.PackageNoofInstallment || '0',
-        ProductDetail: data.ProductDetail || '',
-        ProductDetailAR: data.ProductDetailAR || '',
-        State: data.State || '',
-        isTaxableInvoice: data.isTaxableInvoice === 'true' ? 'True' : 'False',
+        ProductDetail: toDBValue(data.ProductDetail),
+        ProductDetailAR: toDBValue(data.ProductDetailAR),
+        State: toDBValue(data.State),
+        isTaxableInvoice: isActiveValue(data.isTaxableInvoice) ? 'True' : 'False',
         RateType: data.RateType || '1',
         buytypeId: data.buytypeId || 'TIN',
-        buystreetname: data.buystreetname || '',
-        buybuildingname: data.buybuildingname || '',
+        buystreetname: toDBValue(data.buystreetname),
+        buybuildingname: toDBValue(data.buybuildingname),
         buybuildno: data.buybuildno || '0',
-        buyplotid: data.buyplotid || '',
-        buyadbuildno: data.buyadbuildno || '',
+        buyplotid: toDBValue(data.buyplotid),
+        buyadbuildno: toDBValue(data.buyadbuildno),
         buypostalzone: data.buypostalzone || '0',
-        buysubcitysubname: data.buysubcitysubname || '',
-        buycountrySubentity: data.buycountrySubentity || '',
+        buysubcitysubname: toDBValue(data.buysubcitysubname),
+        buycountrySubentity: toDBValue(data.buycountrySubentity),
         buyContractAmount: data.buyContractAmount || '0.00',
         sellersidtype: data.sellersidtype || 'CRN',
-        sellersid: data.sellersid || '',
+        sellersid: toDBValue(data.sellersid),
         scenarioId: data.scenarioId || 'SN001',
-        CustomerSupplierType: data.CustomerSupplierType || 'CUSTOMER/SUPPLIER',
-        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
-        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
-        editby: currentUser,
-        editdate: formattedNow
+        CustomerSupplierType: data.CustomerSupplierType || 'CUSTOMER/SUPPLIER'
     };
 
     // Remove any undefined values
     Object.keys(preparedData).forEach(key => {
         if (preparedData[key] === undefined) {
-            preparedData[key] = '';
+            delete preparedData[key];
         }
     });
+
+    console.log('Prepared data for DB (no audit fields):', preparedData);
 
     return preparedData;
 };
 
 /* ---------------------------
- * Initial State
+ * Initial State (without audit fields)
 ---------------------------- */
 const getInitialCustomerData = (offcode = '1010') => ({
     offcode: offcode,
@@ -244,19 +265,17 @@ const getInitialCustomerData = (offcode = '1010') => ({
     sellersidtype: 'CRN',
     sellersid: '',
     scenarioId: 'SN001',
-    CustomerSupplierType: 'CUSTOMER/SUPPLIER',
-    createdby: '',
-    createdate: new Date().toISOString().split('T')[0],
-    editby: '',
-    editdate: new Date().toISOString().split('T')[0]
+    CustomerSupplierType: 'CUSTOMER/SUPPLIER'
 });
 
 /* ---------------------------
- * Data Service
+ * Data Service with Server-Side Pagination
 ---------------------------- */
 const useDataService = () => {
     const { credentials } = useAuth();
-    const [data, setData] = useState([]);
+    const [profiles, setProfiles] = useState([]);
+    const [allProfiles, setAllProfiles] = useState([]); // Store ALL profiles for code generation
+    const [totalCount, setTotalCount] = useState(0);
     const [lookupData, setLookupData] = useState({
         saleMen: [],
         countries: [],
@@ -266,70 +285,154 @@ const useDataService = () => {
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(7);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [maxCode, setMaxCode] = useState(0);
 
-    const fetchTableData = async (tableName) => {
+    // Fetch ALL profiles for code generation (non-paginated)
+    const fetchAllProfiles = useCallback(async (offcode) => {
         try {
-            const payload = { tableName };
+            console.log('Fetching ALL profiles for code generation...');
+            const whereClause = `offcode = '${offcode}'`;
+            const payload = {
+                tableName: API_CONFIG.TABLES.CUSTOMER_SUPPLIER,
+                where: whereClause,
+                usePagination: false // Get ALL records
+            };
+
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            return data.success ? data.rows : [];
-        } catch (err) {
-            console.error(`Error fetching ${tableName}:`, err);
-            return [];
-        }
-    };
 
-    const loadAllData = useCallback(async () => {
+            if (data.success) {
+                setAllProfiles(data.rows || []);
+                
+                // Calculate max code from ALL profiles
+                const codes = (data.rows || [])
+                    .map(p => {
+                        const codeStr = normalizeValue(p.CustomerCode);
+                        return getNumericCode(codeStr);
+                    })
+                    .filter(code => code > 0);
+
+                const max = codes.length > 0 ? Math.max(...codes) : 0;
+                console.log('All profiles count:', data.rows?.length);
+                console.log('All numeric codes:', codes.sort((a, b) => a - b));
+                console.log('True max code from ALL records:', max);
+                setMaxCode(max);
+            }
+        } catch (err) {
+            console.error('Error fetching all profiles:', err);
+        }
+    }, []);
+
+    const fetchPaginatedData = useCallback(async (page, size, search) => {
         setIsLoading(true);
         setError('');
 
         try {
-            const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
 
+            if (!currentOffcode) {
+                console.warn('No offcode found in credentials');
+                setProfiles([]);
+                setTotalCount(0);
+                setIsLoading(false);
+                return;
+            }
+
+            console.log(`Fetching profiles for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}`);
+
+            // Build where clause for search if needed
+            let whereClause = `offcode = '${currentOffcode}'`;
+            if (search) {
+                whereClause += ` AND (CustomerCode LIKE '%${search}%' OR CustomerName LIKE '%${search}%')`;
+            }
+
+            const payload = {
+                tableName: API_CONFIG.TABLES.CUSTOMER_SUPPLIER,
+                where: whereClause,
+                page: page,
+                limit: size,
+                usePagination: true
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+            const data = await resp.json();
+
+            if (data.success) {
+                setProfiles(data.rows || []);
+                setTotalCount(data.totalCount || 0);
+            } else {
+                setProfiles([]);
+                setTotalCount(0);
+            }
+
+            // Fetch ALL profiles once for code generation (only if not already loaded)
+            if (allProfiles.length === 0) {
+                await fetchAllProfiles(currentOffcode);
+            }
+
+            // Fetch lookup data separately (non-paginated)
+            await fetchLookupData(currentOffcode);
+
+        } catch (err) {
+            console.error('Error fetching data:', err);
+            setError(`Failed to load data: ${err.message}`);
+            setProfiles([]);
+            setTotalCount(0);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [credentials, allProfiles.length, fetchAllProfiles]);
+
+    const fetchLookupData = useCallback(async (offcode) => {
+        try {
             const [
-                customerData,
                 salesManData,
                 countryData,
                 cityData,
                 glAccountData,
                 branchData
             ] = await Promise.all([
-                fetchTableData(API_CONFIG.TABLES.CUSTOMER_SUPPLIER),
-                fetchTableData(API_CONFIG.TABLES.SALESMAN).catch(() => []), // Handle error gracefully
-                fetchTableData(API_CONFIG.TABLES.COUNTRY),
-                fetchTableData(API_CONFIG.TABLES.CITY),
-                fetchTableData(API_CONFIG.TABLES.ACCOUNT),
-                fetchTableData(API_CONFIG.TABLES.BRANCH)
+                fetchTableData(API_CONFIG.TABLES.SALESMAN, offcode),
+                fetchTableData(API_CONFIG.TABLES.COUNTRY, offcode),
+                fetchTableData(API_CONFIG.TABLES.CITY, offcode),
+                fetchTableData(API_CONFIG.TABLES.ACCOUNT, offcode),
+                fetchTableData(API_CONFIG.TABLES.BRANCH, offcode)
             ]);
 
-            const filteredCustomers = customerData.filter(c =>
-                normalizeValue(c.offcode) === currentOffcode
-            );
-
             const filteredSalesMen = Array.isArray(salesManData) ? salesManData
-                .filter(s => normalizeValue(s.offcode) === currentOffcode)
+                .filter(s => normalizeValue(s.offcode) === offcode)
                 .map(s => ({
-                    code: normalizeValue(s.code),
-                    name: normalizeValue(s.name)
+                    code: normalizeValue(s.SaleManCode || s.code),
+                    name: normalizeValue(s.SaleManName || s.name)
                 })) : [];
 
             const filteredGLAccounts = Array.isArray(glAccountData) ? glAccountData
-                .filter(acc => acc.code && acc.name && normalizeValue(acc.offcode) === currentOffcode)
+                .filter(acc => acc.code && acc.name)
                 .map(acc => ({
                     code: normalizeValue(acc.code),
                     name: normalizeValue(acc.name)
                 })) : [];
 
             const currentBranch = Array.isArray(branchData) ? branchData.find(b =>
-                normalizeValue(b.offcode) === currentOffcode
+                normalizeValue(b.offcode) === offcode
             ) : null;
 
-            setData(filteredCustomers);
             setLookupData({
                 saleMen: filteredSalesMen,
                 countries: Array.isArray(countryData) ? countryData.map(c => ({
@@ -346,17 +449,77 @@ const useDataService = () => {
             });
 
         } catch (err) {
-            setError(`Failed to load data: ${err.message}`);
-        } finally {
-            setIsLoading(false);
+            console.error('Error fetching lookup data:', err);
         }
-    }, [credentials]);
+    }, []);
 
+    const fetchTableData = async (tableName, offcode, paginated = false) => {
+        try {
+            const whereClause = `offcode = '${offcode}'`;
+            const payload = {
+                tableName,
+                where: whereClause,
+                usePagination: paginated
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            return data.success ? data.rows : [];
+        } catch (err) {
+            console.error(`Error fetching ${tableName}:`, err);
+            return [];
+        }
+    };
+
+    // Load data whenever pagination or search changes
     useEffect(() => {
-        loadAllData();
-    }, [loadAllData]);
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
 
-    return { data, lookupData, isLoading, error, refetch: loadAllData, setError };
+    const refetch = useCallback(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
+
+    const goToPage = (page) => {
+        console.log(`Changing to page: ${page}`);
+        setCurrentPage(page);
+    };
+
+    const setSearch = (term) => {
+        setSearchTerm(term);
+        setCurrentPage(1);
+    };
+
+    const updatePageSize = (size) => {
+        setPageSize(size);
+        setCurrentPage(1);
+    };
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    return {
+        data: profiles,
+        allProfiles, // Expose ALL profiles for code generation
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading,
+        error,
+        refetch,
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        updatePageSize,
+        maxCode
+    };
 };
 
 /* ---------------------------
@@ -374,10 +537,10 @@ const CustomerSupplierProfileForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
 
     const {
-        offcode, CustomerCode, CustomerName, CustomerNameAR, SHD, isactive,
+        CustomerCode, CustomerName, CustomerNameAR, SHD, isactive,
         billaddress, billaddressAR, zipcode, CountryID, CityID, phone1, mobile, fax,
         email, type, IsSalesTax, SalesTaxNo, SalesTaxNoAR, isCustomer,
         Customercreditisactive, Customercreditdays, CustomerisDiscount, Customerdiscountper,
@@ -416,7 +579,7 @@ const CustomerSupplierProfileForm = ({
                         <span className={`csp-mode-badge ${isNewMode ? 'csp-new' : 'csp-edit'}`}>
                             {isNewMode ? 'NEW' : 'EDIT'}
                         </span>
-                        <span className="csp-code-badge">{CustomerCode || (isNewMode ? 'Generating...' : 'No Code')}</span>
+                        <span className="csp-code-badge">{CustomerCode || (isNewMode ? 'Auto-generated' : 'No Code')}</span>
                         <span className="csp-office-badge">Office: {currentOffcode}</span>
                         {!isActiveValue(isactive) && <span className="csp-inactive-badge">INACTIVE</span>}
                     </div>
@@ -454,13 +617,12 @@ const CustomerSupplierProfileForm = ({
                             <input
                                 type="text"
                                 value={CustomerCode}
-                                onChange={e => handleInput('CustomerCode', e.target.value)}
-                                disabled={true} // Always disabled - auto-generated
+                                disabled={true}
                                 placeholder="Auto-generated"
                                 className="csp-form-input csp-disabled-field"
                             />
                             {isNewMode && (
-                                <small className="csp-field-hint">Code is auto-generated and cannot be edited</small>
+                                <small className="csp-field-hint">Code will be auto-generated as 0000000001, 0000000002, etc.</small>
                             )}
                         </div>
                         <div className="csp-field-group csp-required">
@@ -505,9 +667,9 @@ const CustomerSupplierProfileForm = ({
                         </div>
                         <div className="csp-field-group">
                             <label>Profile Type</label>
-                            <select 
-                                value={CustomerSupplierType} 
-                                onChange={e => handleInput('CustomerSupplierType', e.target.value)} 
+                            <select
+                                value={CustomerSupplierType}
+                                onChange={e => handleInput('CustomerSupplierType', e.target.value)}
                                 disabled={!canEdit}
                                 className="csp-form-select"
                             >
@@ -601,7 +763,7 @@ const CustomerSupplierProfileForm = ({
                                 className="csp-form-input"
                             />
                         </div>
-                        <div className="csp-field-group csp-full-width">
+                        <div className="csp-field-group full-width">
                             <label>Billing Address (English)</label>
                             <input
                                 type="text"
@@ -614,9 +776,9 @@ const CustomerSupplierProfileForm = ({
                         </div>
                         <div className="csp-field-group">
                             <label>Country</label>
-                            <select 
-                                value={CountryID} 
-                                onChange={e => handleInput('CountryID', e.target.value)} 
+                            <select
+                                value={CountryID}
+                                onChange={e => handleInput('CountryID', e.target.value)}
                                 disabled={!canEdit}
                                 className="csp-form-select"
                             >
@@ -628,9 +790,9 @@ const CustomerSupplierProfileForm = ({
                         </div>
                         <div className="csp-field-group">
                             <label>City</label>
-                            <select 
-                                value={CityID} 
-                                onChange={e => handleInput('CityID', e.target.value)} 
+                            <select
+                                value={CityID}
+                                onChange={e => handleInput('CityID', e.target.value)}
                                 disabled={!canEdit}
                                 className="csp-form-select"
                             >
@@ -647,7 +809,7 @@ const CustomerSupplierProfileForm = ({
                 <div className="csp-form-section">
                     <h4><Icons.UserCircle size={18} /> Customer Settings</h4>
                     <div className="csp-form-grid csp-grid-3">
-                        <div className="csp-field-group csp-checkbox csp-full-width">
+                        <div className="csp-field-group csp-checkbox full-width">
                             <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
@@ -760,7 +922,7 @@ const CustomerSupplierProfileForm = ({
                 <div className="csp-form-section">
                     <h4><Icons.Truck size={18} /> Supplier Settings</h4>
                     <div className="csp-form-grid csp-grid-3">
-                        <div className="csp-field-group csp-checkbox csp-full-width">
+                        <div className="csp-field-group csp-checkbox full-width">
                             <label className="csp-checkbox-wrapper">
                                 <input
                                     type="checkbox"
@@ -862,25 +1024,36 @@ const CustomerSupplierProfileForm = ({
 ---------------------------- */
 const CustomerSupplierProfile = () => {
     const { credentials } = useAuth();
-    const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = credentials?.company?.offcode || credentials?.offcode || '0101';
+    const { hasPermission, loading: rightsLoading } = useRights();
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
     const currentUser = credentials?.username || 'SYSTEM';
+    const sidebarRef = useRef(null);
 
-    const { data: profiles, lookupData, isLoading: isDataLoading, error, refetch, setError } = useDataService();
+    const {
+        data: profiles,
+        allProfiles, // Get ALL profiles for code generation
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading: isDataLoading,
+        error,
+        refetch,
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        maxCode
+    } = useDataService();
 
     const [selectedProfile, setSelectedProfile] = useState(null);
     const [formData, setFormData] = useState(() => getInitialCustomerData(currentOffcode));
     const [currentMode, setCurrentMode] = useState('new');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
-    const [screenConfig, setScreenConfig] = useState(null);
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(7);
-    const [paginatedProfiles, setPaginatedProfiles] = useState([]);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
 
     // Load screen configuration
     useEffect(() => {
@@ -893,7 +1066,6 @@ const CustomerSupplierProfile = () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    setScreenConfig(data.screen);
                     setMenuId(data.screen.id);
                 }
             } catch (error) {
@@ -903,60 +1075,85 @@ const CustomerSupplierProfile = () => {
         loadScreenConfig();
     }, []);
 
-    // Update paginated profiles
+    // Handle search with debounce
     useEffect(() => {
-        const filtered = profiles.filter(p =>
-            normalizeValue(p.CustomerName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            normalizeValue(p.CustomerCode).includes(searchTerm)
-        );
-        
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        setPaginatedProfiles(filtered.slice(startIndex, endIndex));
-    }, [profiles, currentPage, itemsPerPage, searchTerm]);
+        const timer = setTimeout(() => {
+            if (localSearchTerm !== searchTerm) {
+                setSearch(localSearchTerm);
+            }
+        }, 500);
 
-    // Reset page on search
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+        return () => clearTimeout(timer);
+    }, [localSearchTerm, searchTerm, setSearch]);
 
-    // ✅ Fixed: Generate customer code with 10-digit format (0000000001)
-    const generateCustomerCode = () => {
-        // Filter profiles for current office only
-        const officeProfiles = profiles.filter(p => 
-            normalizeValue(p.offcode) === currentOffcode
-        );
+    // Get the true maximum code from ALL profiles
+    const getTrueMaxCode = useCallback(() => {
+        // Use allProfiles if available, otherwise fall back to paginated profiles
+        const sourceProfiles = allProfiles.length > 0 ? allProfiles : profiles;
         
-        const existingCodes = officeProfiles
-            .map(p => {
-                const code = normalizeValue(p.CustomerCode);
-                // Try to parse as integer, but handle non-numeric codes
-                const parsed = parseInt(code, 10);
-                return isNaN(parsed) ? 0 : parsed;
-            })
+        const numericCodes = sourceProfiles
+            .filter(p => p.offcode === currentOffcode)
+            .map(p => getNumericCode(p.CustomerCode))
             .filter(code => code > 0);
         
-        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
-        // Pad with leading zeros to make it 10 digits
-        const newCode = (maxCode + 1).toString().padStart(10, '0');
-        console.log('Generated new code:', newCode, 'from max:', maxCode); // For debugging
-        return newCode;
-    };
+        return numericCodes.length > 0 ? Math.max(...numericCodes) : 0;
+    }, [allProfiles, profiles, currentOffcode]);
+
+    // Generate customer code based on true maximum from ALL records (10-digit)
+    const generateCustomerCode = useCallback(() => {
+        const trueMax = getTrueMaxCode();
+        const nextCode = trueMax + 1;
+        const paddedCode = formatCode(nextCode);
+        
+        console.log('Generating code from ALL records:', { 
+            trueMax, 
+            nextCode, 
+            paddedCode,
+            allProfilesCount: allProfiles.length,
+            profilesCount: profiles.length
+        });
+        
+        return paddedCode;
+    }, [getTrueMaxCode, allProfiles.length, profiles.length]);
 
     // Initialize form for new profile with auto-generated code
     useEffect(() => {
-        if (currentMode === 'new') {
+        if (currentMode === 'new' && !selectedProfile) {
             const defaultCountryId = lookupData.countries[0]?.id || '1';
             const defaultCityId = lookupData.cities.find(c => c.countryId === defaultCountryId)?.id || '1';
             
-            // Generate the code immediately for new profiles
-            const newCode = generateCustomerCode();
+            // Use ALL profiles for code generation
+            const sourceProfiles = allProfiles.length > 0 ? allProfiles : profiles;
+            
+            // Get all existing codes from ALL records
+            const existingCodes = new Set(
+                sourceProfiles
+                    .filter(p => p.offcode === currentOffcode)
+                    .map(p => getNumericCode(p.CustomerCode))
+            );
+            
+            // Find the true maximum
+            const trueMax = Math.max(0, ...Array.from(existingCodes));
+            
+            // Find the next available code
+            let candidate = trueMax + 1;
+            while (existingCodes.has(candidate)) {
+                candidate++;
+            }
+            
+            const newCode = formatCode(candidate);
+            
+            console.log('New profile initialization:', {
+                trueMax,
+                candidate,
+                newCode,
+                existingCodesCount: existingCodes.size,
+                source: allProfiles.length > 0 ? 'allProfiles' : 'profiles'
+            });
 
-            setFormData(prev => ({
+            setFormData({
                 ...getInitialCustomerData(currentOffcode),
-                CustomerCode: newCode, // Set the generated code immediately
-                createdby: currentUser,
-                editby: currentUser,
+                CustomerCode: newCode,
                 CountryID: defaultCountryId,
                 CityID: defaultCityId,
                 country: lookupData.countries.find(c => c.id === defaultCountryId)?.name || 'Pakistan',
@@ -964,9 +1161,9 @@ const CustomerSupplierProfile = () => {
                 CustomerglCode: lookupData.glAccounts[0]?.code || '',
                 SupplierglCode: lookupData.glAccounts[0]?.code || '',
                 SaleManCode: lookupData.saleMen[0]?.code || ''
-            }));
+            });
         }
-    }, [currentMode, currentOffcode, currentUser, lookupData, profiles]);
+    }, [currentMode, currentOffcode, lookupData, selectedProfile, allProfiles, profiles]);
 
     // Load selected profile for editing
     useEffect(() => {
@@ -1018,10 +1215,41 @@ const CustomerSupplierProfile = () => {
             return;
         }
 
-        // For new profiles, ensure we have a code (it should already be generated)
-        if (currentMode === 'new' && (!formData.CustomerCode || formData.CustomerCode.trim() === '')) {
-            setMessage('❌ Customer Code generation failed!');
+        if (!formData.CustomerCode.trim()) {
+            setMessage('❌ Customer Code is required!');
             return;
+        }
+
+        // For new records, verify the code is still available using ALL profiles
+        if (currentMode === 'new') {
+            // Use ALL profiles for duplicate check
+            const sourceProfiles = allProfiles.length > 0 ? allProfiles : profiles;
+            
+            const existingCode = sourceProfiles.find(p =>
+                p.CustomerCode === formData.CustomerCode &&
+                p.offcode === currentOffcode
+            );
+
+            if (existingCode) {
+                // Code already exists, find the next available code from ALL records
+                const existingCodes = new Set(
+                    sourceProfiles
+                        .filter(p => p.offcode === currentOffcode)
+                        .map(p => getNumericCode(p.CustomerCode))
+                );
+                
+                const trueMax = Math.max(0, ...Array.from(existingCodes));
+                let candidate = trueMax + 1;
+                while (existingCodes.has(candidate)) {
+                    candidate++;
+                }
+                
+                const newCode = formatCode(candidate);
+                setFormData(prev => ({ ...prev, CustomerCode: newCode }));
+                setMessage(`⚠️ Code was taken, new code generated from ALL records: ${newCode}`);
+                setIsSaving(false);
+                return;
+            }
         }
 
         setIsSaving(true);
@@ -1029,7 +1257,7 @@ const CustomerSupplierProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database
+        // Prepare data for database - WITHOUT audit fields
         const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
@@ -1044,6 +1272,8 @@ const CustomerSupplierProfile = () => {
             };
         }
 
+        console.log('Sending payload (no audit fields):', JSON.stringify(payload, null, 2));
+
         try {
             const resp = await fetch(endpoint, {
                 method: 'POST',
@@ -1052,23 +1282,53 @@ const CustomerSupplierProfile = () => {
             });
 
             if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
+                const errorText = await resp.text();
+                console.log('Error Response:', errorText);
+
+                // Check if it's a duplicate key error
+                if (errorText.includes('duplicate key') || errorText.includes('2627')) {
+                    // Find the next available code from ALL records
+                    const sourceProfiles = allProfiles.length > 0 ? allProfiles : profiles;
+                    
+                    const existingCodes = new Set(
+                        sourceProfiles
+                            .filter(p => p.offcode === currentOffcode)
+                            .map(p => getNumericCode(p.CustomerCode))
+                    );
+                    
+                    const trueMax = Math.max(0, ...Array.from(existingCodes));
+                    let candidate = trueMax + 1;
+                    while (existingCodes.has(candidate)) {
+                        candidate++;
+                    }
+                    
+                    const newCode = formatCode(candidate);
+                    setFormData(prev => ({ ...prev, CustomerCode: newCode }));
+                    setMessage(`⚠️ Code was taken, new code generated from ALL records: ${newCode}`);
+                    setIsSaving(false);
+                    return;
+                }
+
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
             }
 
             const result = await resp.json();
+            console.log('Save result:', result);
 
             if (result.success) {
                 setMessage('✅ Profile saved successfully!');
                 await refetch();
 
                 if (currentMode === 'new') {
-                    // Find the newly created profile or use the one we just created
-                    const newRecord = profiles.find(p =>
-                        p.CustomerCode === formData.CustomerCode && p.offcode === currentOffcode
-                    ) || { ...formData };
-                    
+                    // For new records, stay in edit mode with the new record selected
+                    const newRecord = {
+                        ...preparedData,
+                        CustomerName: preparedData.CustomerName
+                    };
+
                     setSelectedProfile(newRecord);
                     setCurrentMode('edit');
+                    setFormData(newRecord);
                 }
             } else {
                 setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
@@ -1118,11 +1378,16 @@ const CustomerSupplierProfile = () => {
 
             if (result.success) {
                 setMessage('✅ Profile deleted successfully!');
-                await refetch();
+
+                // Check if current page is now empty and we're not on page 1
+                if (profiles.length === 1 && currentPage > 1) {
+                    goToPage(currentPage - 1);
+                } else {
+                    await refetch();
+                }
 
                 if (selectedProfile && selectedProfile.CustomerCode === profile.CustomerCode) {
-                    setSelectedProfile(null);
-                    setCurrentMode('new');
+                    handleNewProfile();
                 }
             } else {
                 setMessage(`❌ Delete failed: ${result.message || 'Unknown error'}`);
@@ -1137,13 +1402,12 @@ const CustomerSupplierProfile = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        console.log(`Page change requested to: ${page}`);
+        goToPage(page);
+        if (sidebarRef.current) {
+            sidebarRef.current.scrollTop = 0;
+        }
     };
-
-    const filteredCount = profiles.filter(p =>
-        normalizeValue(p.CustomerName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        normalizeValue(p.CustomerCode).includes(searchTerm)
-    ).length;
 
     const CustomerProfileSidebar = () => {
         return (
@@ -1152,7 +1416,7 @@ const CustomerSupplierProfile = () => {
                     <div className="csp-sidebar-title">
                         <Icons.Users size={20} />
                         <h3>Profiles</h3>
-                        <span className="csp-profile-count">{filteredCount} profiles</span>
+                        <span className="csp-profile-count">{totalCount} profiles</span>
                     </div>
                     <div className="csp-sidebar-actions">
                         <div className="csp-search-container">
@@ -1160,8 +1424,8 @@ const CustomerSupplierProfile = () => {
                             <input
                                 type="text"
                                 placeholder="Search by code or name..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
+                                value={localSearchTerm}
+                                onChange={e => setLocalSearchTerm(e.target.value)}
                                 className="csp-search-input"
                             />
                         </div>
@@ -1176,21 +1440,29 @@ const CustomerSupplierProfile = () => {
                     </div>
                 </div>
 
-                <div className="csp-sidebar-content">
+                <div
+                    className="csp-sidebar-content"
+                    ref={sidebarRef}
+                    style={{
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        height: 'calc(100vh - 250px)',
+                        scrollBehavior: 'smooth'
+                    }}
+                >
                     {isDataLoading && profiles.length === 0 ? (
                         <div className="csp-loading-state">
                             <Icons.Loader size={32} className="csp-spin" />
                             <p>Loading Profiles...</p>
                         </div>
-                    ) : paginatedProfiles.length > 0 ? (
+                    ) : profiles.length > 0 ? (
                         <>
                             <div className="csp-profile-list">
-                                {paginatedProfiles.map(profile => (
+                                {profiles.map(profile => (
                                     <div
                                         key={`${profile.CustomerCode}-${profile.offcode}`}
-                                        className={`csp-profile-item ${
-                                            selectedProfile?.CustomerCode === profile.CustomerCode && currentMode === 'edit' ? 'csp-selected' : ''
-                                        }`}
+                                        className={`csp-profile-item ${selectedProfile?.CustomerCode === profile.CustomerCode && currentMode === 'edit' ? 'csp-selected' : ''
+                                            }`}
                                         onClick={() => handleSelectProfile(profile)}
                                     >
                                         <div className="csp-profile-info">
@@ -1223,21 +1495,24 @@ const CustomerSupplierProfile = () => {
                                     </div>
                                 ))}
                             </div>
-                            
-                            <Pagination
-                                currentPage={currentPage}
-                                totalItems={filteredCount}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                maxVisiblePages={3}
-                                loading={isDataLoading}
-                            />
+
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={handlePageChange}
+                                    totalItems={totalCount}
+                                    itemsPerPage={pageSize}
+                                    maxVisiblePages={5}
+                                    loading={isDataLoading}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="csp-empty-state">
                             <Icons.UserCircle size={48} className="csp-empty-icon" />
                             <h4>No profiles found</h4>
-                            {searchTerm ? (
+                            {localSearchTerm ? (
                                 <p>Try a different search term</p>
                             ) : (
                                 <p>Create your first profile to get started</p>
@@ -1260,7 +1535,6 @@ const CustomerSupplierProfile = () => {
 
     return (
         <div className="csp-container">
-            {/* Header */}
             <header className="csp-header">
                 <div className="csp-header-left">
                     <Icons.Users size={24} className="csp-header-icon" />
@@ -1276,7 +1550,6 @@ const CustomerSupplierProfile = () => {
                 </div>
             </header>
 
-            {/* Toolbar */}
             <div className="csp-toolbar">
                 <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
@@ -1292,13 +1565,13 @@ const CustomerSupplierProfile = () => {
                         </button>
                     )}
                     {hasPermission && hasPermission(menuId, 'edit') && (
-                        <button 
-                            className="csp-toolbar-btn" 
-                            onClick={() => { 
-                                if (selectedProfile) { 
-                                    setCurrentMode('edit'); 
+                        <button
+                            className="csp-toolbar-btn"
+                            onClick={() => {
+                                if (selectedProfile) {
+                                    setCurrentMode('edit');
                                 } else {
-                                    setMessage('Select a profile to edit'); 
+                                    setMessage('Select a profile to edit');
                                 }
                             }}
                         >
@@ -1316,7 +1589,6 @@ const CustomerSupplierProfile = () => {
                 </div>
             </div>
 
-            {/* Error Toast */}
             {error && (
                 <div className="csp-toast csp-error">
                     <div className="csp-toast-content">
@@ -1329,7 +1601,6 @@ const CustomerSupplierProfile = () => {
                 </div>
             )}
 
-            {/* Message Toast */}
             {message && (
                 <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
                     <div className="csp-toast-content">
@@ -1344,7 +1615,6 @@ const CustomerSupplierProfile = () => {
                 </div>
             )}
 
-            {/* Main Content */}
             <div className="csp-main-layout">
                 <CustomerProfileSidebar />
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import "./ChartofAccount.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
@@ -31,7 +31,13 @@ const API_CONFIG = {
 /* ---------------------------
  * Auth Hook
 ---------------------------- */
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 /* ---------------------------
  * Utilities
@@ -65,9 +71,9 @@ const formatDateForDB = (date) => {
 };
 
 /* ---------------------------
- * Initial State
+ * Initial State (without audit fields)
 ---------------------------- */
-const getInitialSalesmanData = (offcode = '0101') => ({
+const getInitialSalesmanData = (offcode = '1010') => ({
     offcode: offcode,
     SaleManCode: '',
     SaleManName: '',
@@ -94,18 +100,12 @@ const getInitialSalesmanData = (offcode = '0101') => ({
     alternativeCode: '',
     defaultTypePerAmt: '01',
     defaultCommisionAmount: '0',
-    SaleManNameAR: '',
-    createdby: '',
-    createdate: new Date().toISOString().split('T')[0],
-    editby: '',
-    editdate: new Date().toISOString().split('T')[0]
+    SaleManNameAR: ''
 });
 
-// Prepare data for database insertion/update
+// Prepare data for database insertion/update - WITHOUT audit fields
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    const now = new Date();
-    const formattedNow = formatDateForDB(now);
-    
+    // Create a clean object with only the fields that exist in the database
     const preparedData = {
         offcode: currentOffcode,
         SaleManCode: data.SaleManCode || '',
@@ -133,42 +133,171 @@ const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
         CurrentBalance: data.CurrentBalance || '0.00',
         alternativeCode: data.alternativeCode || '',
         defaultTypePerAmt: data.defaultTypePerAmt || '01',
-        defaultCommisionAmount: data.defaultCommisionAmount || '0',
-        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
-        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
-        editby: currentUser,
-        editdate: formattedNow
+        defaultCommisionAmount: data.defaultCommisionAmount || '0'
     };
 
     // Remove any undefined values
     Object.keys(preparedData).forEach(key => {
         if (preparedData[key] === undefined) {
-            preparedData[key] = '';
+            delete preparedData[key];
         }
     });
+
+    console.log('Prepared data for DB:', preparedData);
 
     return preparedData;
 };
 
 /* ---------------------------
- * Data Service
+ * Data Service with Server-Side Pagination
 ---------------------------- */
 const useDataService = () => {
     const { credentials } = useAuth();
-    const [data, setData] = useState([]);
+    const [salesmenData, setSalesmenData] = useState([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [lookupData, setLookupData] = useState({
         countries: [],
         cities: [],
         glAccounts: [],
         branchData: null,
-        salesmen: [] // For ManagerCode dropdown
+        salesmen: []
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(7);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [maxCode, setMaxCode] = useState(0);
 
-    const fetchTableData = async (tableName) => {
+    const fetchPaginatedData = useCallback(async (page, size, search) => {
+        setIsLoading(true);
+        setError('');
+
         try {
-            const payload = { tableName };
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+            
+            if (!currentOffcode) {
+                console.warn('No offcode found in credentials');
+                setSalesmenData([]);
+                setTotalCount(0);
+                setIsLoading(false);
+                return;
+            }
+
+            console.log(`Fetching salesmen for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}`);
+            
+            // Build where clause for search if needed
+            let whereClause = `offcode = '${currentOffcode}'`;
+            if (search) {
+                whereClause += ` AND (SaleManCode LIKE '%${search}%' OR SaleManName LIKE '%${search}%')`;
+            }
+            
+            const payload = { 
+                tableName: API_CONFIG.TABLES.SALESMAN,
+                where: whereClause,
+                page: page,
+                limit: size,
+                usePagination: true
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            
+            const data = await resp.json();
+            
+            if (data.success) {
+                setSalesmenData(data.rows || []);
+                setTotalCount(data.totalCount || 0);
+            } else {
+                setSalesmenData([]);
+                setTotalCount(0);
+            }
+
+            // Fetch lookup data separately (non-paginated)
+            await fetchLookupData(currentOffcode);
+
+        } catch (err) {
+            console.error('Error fetching data:', err);
+            setError(`Failed to load data: ${err.message}`);
+            setSalesmenData([]);
+            setTotalCount(0);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [credentials]);
+
+    const fetchLookupData = useCallback(async (offcode) => {
+        try {
+            const [
+                countryData,
+                cityData,
+                glAccountData,
+                branchData,
+                allSalesmenData
+            ] = await Promise.all([
+                fetchTableData(API_CONFIG.TABLES.COUNTRY, offcode),
+                fetchTableData(API_CONFIG.TABLES.CITY, offcode),
+                fetchTableData(API_CONFIG.TABLES.ACCOUNT, offcode),
+                fetchTableData(API_CONFIG.TABLES.BRANCH, offcode),
+                fetchTableData(API_CONFIG.TABLES.SALESMAN, offcode, false) // Get all salesmen for dropdown
+            ]);
+
+            const filteredGLAccounts = glAccountData
+                .filter(acc => acc.code && acc.name)
+                .map(acc => ({
+                    code: normalizeValue(acc.code),
+                    name: normalizeValue(acc.name)
+                }));
+
+            const currentBranch = branchData.find(b =>
+                normalizeValue(b.offcode) === offcode
+            );
+
+            setLookupData({
+                countries: countryData.map(c => ({
+                    id: normalizeValue(c.CountryID),
+                    name: normalizeValue(c.CountryName)
+                })),
+                cities: cityData.map(c => ({
+                    id: normalizeValue(c.CityID),
+                    name: normalizeValue(c.CityName),
+                    countryId: normalizeValue(c.CountryID)
+                })),
+                glAccounts: filteredGLAccounts,
+                branchData: currentBranch,
+                salesmen: allSalesmenData.map(s => ({
+                    code: normalizeValue(s.SaleManCode),
+                    name: normalizeValue(s.SaleManName)
+                }))
+            });
+
+            // Calculate max code from all salesmen
+            const codes = allSalesmenData
+                .map(s => parseInt(normalizeValue(s.SaleManCode), 10))
+                .filter(code => !isNaN(code) && code > 0);
+            
+            const max = codes.length > 0 ? Math.max(...codes) : 0;
+            setMaxCode(max);
+
+        } catch (err) {
+            console.error('Error fetching lookup data:', err);
+        }
+    }, []);
+
+    const fetchTableData = async (tableName, offcode, paginated = false) => {
+        try {
+            const whereClause = `offcode = '${offcode}'`;
+            const payload = { 
+                tableName,
+                where: whereClause,
+                usePagination: paginated
+            };
+            
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -183,75 +312,49 @@ const useDataService = () => {
         }
     };
 
-    const loadAllData = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const currentOffcode = credentials?.company?.offcode || '0101';
-
-            const [
-                salesmanData,
-                countryData,
-                cityData,
-                glAccountData,
-                branchData
-            ] = await Promise.all([
-                fetchTableData(API_CONFIG.TABLES.SALESMAN),
-                fetchTableData(API_CONFIG.TABLES.COUNTRY),
-                fetchTableData(API_CONFIG.TABLES.CITY),
-                fetchTableData(API_CONFIG.TABLES.ACCOUNT),
-                fetchTableData(API_CONFIG.TABLES.BRANCH)
-            ]);
-
-            // Filter data by current offcode
-            const filteredSalesmen = salesmanData.filter(s =>
-                normalizeValue(s.offcode) === currentOffcode
-            );
-
-            const filteredGLAccounts = glAccountData
-                .filter(acc => acc.code && acc.name && normalizeValue(acc.offcode) === currentOffcode)
-                .map(acc => ({
-                    code: normalizeValue(acc.code),
-                    name: normalizeValue(acc.name)
-                }));
-
-            // Get branch data for control accounts
-            const currentBranch = branchData.find(b =>
-                normalizeValue(b.offcode) === currentOffcode
-            );
-
-            setData(filteredSalesmen);
-            setLookupData({
-                countries: countryData.map(c => ({
-                    id: normalizeValue(c.CountryID),
-                    name: normalizeValue(c.CountryName)
-                })),
-                cities: cityData.map(c => ({
-                    id: normalizeValue(c.CityID),
-                    name: normalizeValue(c.CityName),
-                    countryId: normalizeValue(c.CountryID)
-                })),
-                glAccounts: filteredGLAccounts,
-                branchData: currentBranch,
-                salesmen: filteredSalesmen.map(s => ({
-                    code: normalizeValue(s.SaleManCode),
-                    name: normalizeValue(s.SaleManName)
-                }))
-            });
-
-        } catch (err) {
-            setError(`Failed to load data: ${err.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [credentials]);
-
+    // Load data whenever pagination or search changes
     useEffect(() => {
-        loadAllData();
-    }, [loadAllData]);
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
 
-    return { data, lookupData, isLoading, error, refetch: loadAllData, setError };
+    const refetch = useCallback(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm);
+    }, [currentPage, pageSize, searchTerm, fetchPaginatedData]);
+
+    const goToPage = (page) => {
+        console.log(`Changing to page: ${page}`);
+        setCurrentPage(page);
+    };
+
+    const setSearch = (term) => {
+        setSearchTerm(term);
+        setCurrentPage(1);
+    };
+
+    const updatePageSize = (size) => {
+        setPageSize(size);
+        setCurrentPage(1);
+    };
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    return { 
+        data: salesmenData,
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        updatePageSize,
+        maxCode
+    };
 };
 
 /* ---------------------------
@@ -269,10 +372,10 @@ const SalesmanProfileForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '1010';
 
     const {
-        offcode, SaleManCode, SaleManName, SaleManNameAR, ManagerCode, glCode, isactive, contact,
+        SaleManCode, SaleManName, SaleManNameAR, ManagerCode, glCode, isactive, contact,
         CountryID, CityID, phone1, mobile, email,
         creditisactive, creditlimit1, creditlimit2, creditlimit3, creditdays,
         isDiscount, discountper, paymentmethod, CurrentBalance, alternativeCode,
@@ -729,25 +832,35 @@ const SalesmanProfileForm = ({
 ---------------------------- */
 const SalesmanProfile = () => {
     const { credentials } = useAuth();
-    const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = credentials?.company?.offcode || '0101';
+    const { hasPermission, loading: rightsLoading } = useRights();
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '1010';
     const currentUser = credentials?.username || 'SYSTEM';
+    const sidebarRef = useRef(null);
 
-    const { data: salesmen, lookupData, isLoading: isDataLoading, error, refetch, setError } = useDataService();
+    const { 
+        data: salesmen,
+        totalCount,
+        totalPages,
+        lookupData,
+        isLoading: isDataLoading, 
+        error, 
+        refetch, 
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        maxCode
+    } = useDataService();
 
     const [selectedSalesman, setSelectedSalesman] = useState(null);
     const [formData, setFormData] = useState(() => getInitialSalesmanData(currentOffcode));
     const [currentMode, setCurrentMode] = useState('new');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
-    const [screenConfig, setScreenConfig] = useState(null);
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(7);
-    const [paginatedSalesmen, setPaginatedSalesmen] = useState([]);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
 
     // Load screen configuration
     useEffect(() => {
@@ -760,7 +873,6 @@ const SalesmanProfile = () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    setScreenConfig(data.screen);
                     setMenuId(data.screen.id);
                 }
             } catch (error) {
@@ -770,61 +882,41 @@ const SalesmanProfile = () => {
         loadScreenConfig();
     }, []);
 
-    // Filter and paginate salesmen
+    // Handle search with debounce
     useEffect(() => {
-        const filtered = salesmen.filter(s =>
-            normalizeValue(s.SaleManName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            normalizeValue(s.SaleManCode).includes(searchTerm)
-        );
-        
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        setPaginatedSalesmen(filtered.slice(startIndex, endIndex));
-    }, [salesmen, currentPage, itemsPerPage, searchTerm]);
+        const timer = setTimeout(() => {
+            if (localSearchTerm !== searchTerm) {
+                setSearch(localSearchTerm);
+            }
+        }, 500);
 
-    // Reset page on search
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+        return () => clearTimeout(timer);
+    }, [localSearchTerm, searchTerm, setSearch]);
 
-    // Generate salesman code starting from 00001
+    // Generate salesman code based on maxCode from all records
     const generateSalesmanCode = useCallback(() => {
-        if (salesmen.length === 0) {
-            return '00001';
-        }
-
-        // Get all existing codes and find the maximum
-        const existingCodes = salesmen
-            .map(s => parseInt(normalizeValue(s.SaleManCode), 10))
-            .filter(code => !isNaN(code) && code > 0);
-
-        const maxCode = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
         const nextCode = maxCode + 1;
-
-        // Format as 5-digit string with leading zeros
         return nextCode.toString().padStart(5, '0');
-    }, [salesmen]);
+    }, [maxCode]);
 
     // Initialize form data for new record
     useEffect(() => {
-        if (currentMode === 'new') {
+        if (currentMode === 'new' && !selectedSalesman) {
             const defaultCountryId = lookupData.countries[0]?.id || '1';
             const defaultCityId = lookupData.cities.find(c => c.countryId === defaultCountryId)?.id || '1';
             const newCode = generateSalesmanCode();
 
-            setFormData(prev => ({
+            setFormData({
                 ...getInitialSalesmanData(currentOffcode),
                 SaleManCode: newCode,
                 CountryID: defaultCountryId,
                 CityID: defaultCityId,
                 country: lookupData.countries.find(c => c.id === defaultCountryId)?.name || 'Pakistan',
                 city: lookupData.cities.find(c => c.id === defaultCityId)?.name || 'LAHORE',
-                glCode: lookupData.glAccounts[0]?.code || '',
-                createdby: currentUser,
-                editby: currentUser
-            }));
+                glCode: lookupData.glAccounts[0]?.code || ''
+            });
         }
-    }, [currentMode, currentOffcode, currentUser, lookupData, generateSalesmanCode]);
+    }, [currentMode, currentOffcode, lookupData, generateSalesmanCode, selectedSalesman]);
 
     // Load selected salesman data into form
     useEffect(() => {
@@ -886,7 +978,7 @@ const SalesmanProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database
+        // Prepare data for database - WITHOUT audit fields
         const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
@@ -901,6 +993,8 @@ const SalesmanProfile = () => {
             };
         }
 
+        console.log('Sending payload:', payload);
+
         try {
             const resp = await fetch(endpoint, {
                 method: 'POST',
@@ -909,22 +1003,28 @@ const SalesmanProfile = () => {
             });
 
             if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
+                const errorText = await resp.text();
+                console.log('Error Response:', errorText);
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
             }
 
             const result = await resp.json();
+            console.log('Save result:', result);
 
             if (result.success) {
                 setMessage('✅ Salesman saved successfully!');
                 await refetch();
 
                 if (currentMode === 'new') {
-                    // Find the newly created record
-                    const newRecord = salesmen.find(s =>
-                        s.SaleManCode === formData.SaleManCode && s.offcode === currentOffcode
-                    ) || formData;
+                    // For new records, stay in edit mode with the new record selected
+                    const newRecord = {
+                        ...preparedData,
+                        SaleManName: preparedData.SaleManName
+                    };
+                    
                     setSelectedSalesman(newRecord);
                     setCurrentMode('edit');
+                    setFormData(newRecord);
                 }
             } else {
                 setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
@@ -974,11 +1074,16 @@ const SalesmanProfile = () => {
 
             if (result.success) {
                 setMessage('✅ Salesman deleted successfully!');
-                await refetch();
+                
+                // Check if current page is now empty and we're not on page 1
+                if (salesmen.length === 1 && currentPage > 1) {
+                    goToPage(currentPage - 1);
+                } else {
+                    await refetch();
+                }
 
                 if (selectedSalesman && selectedSalesman.SaleManCode === salesman.SaleManCode) {
-                    setSelectedSalesman(null);
-                    setCurrentMode('new');
+                    handleNewSalesman();
                 }
             } else {
                 setMessage(`❌ Delete failed: ${result.message || 'Unknown error'}`);
@@ -993,13 +1098,12 @@ const SalesmanProfile = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        console.log(`Page change requested to: ${page}`);
+        goToPage(page);
+        if (sidebarRef.current) {
+            sidebarRef.current.scrollTop = 0;
+        }
     };
-
-    const filteredCount = salesmen.filter(s =>
-        normalizeValue(s.SaleManName).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        normalizeValue(s.SaleManCode).includes(searchTerm)
-    ).length;
 
     const SalesmanProfileSidebar = () => {
         return (
@@ -1008,7 +1112,7 @@ const SalesmanProfile = () => {
                     <div className="csp-sidebar-title">
                         <Icons.User size={20} />
                         <h3>Salesmen</h3>
-                        <span className="csp-profile-count">{filteredCount} salesmen</span>
+                        <span className="csp-profile-count">{totalCount} salesmen</span>
                     </div>
                     <div className="csp-sidebar-actions">
                         <div className="csp-search-container">
@@ -1016,8 +1120,8 @@ const SalesmanProfile = () => {
                             <input
                                 type="text"
                                 placeholder="Search by code or name..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
+                                value={localSearchTerm}
+                                onChange={e => setLocalSearchTerm(e.target.value)}
                                 className="csp-search-input"
                             />
                         </div>
@@ -1032,16 +1136,25 @@ const SalesmanProfile = () => {
                     </div>
                 </div>
 
-                <div className="csp-sidebar-content">
+                <div 
+                    className="csp-sidebar-content" 
+                    ref={sidebarRef}
+                    style={{
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        height: 'calc(100vh - 250px)',
+                        scrollBehavior: 'smooth'
+                    }}
+                >
                     {isDataLoading && salesmen.length === 0 ? (
                         <div className="csp-loading-state">
                             <Icons.Loader size={32} className="csp-spin" />
                             <p>Loading Salesmen...</p>
                         </div>
-                    ) : paginatedSalesmen.length > 0 ? (
+                    ) : salesmen.length > 0 ? (
                         <>
                             <div className="csp-profile-list">
-                                {paginatedSalesmen.map(salesman => (
+                                {salesmen.map(salesman => (
                                     <div
                                         key={`${salesman.SaleManCode}-${salesman.offcode}`}
                                         className={`csp-profile-item ${selectedSalesman?.SaleManCode === salesman.SaleManCode && currentMode === 'edit' ? 'csp-selected' : ''
@@ -1081,20 +1194,23 @@ const SalesmanProfile = () => {
                                 ))}
                             </div>
                             
-                            <Pagination
-                                currentPage={currentPage}
-                                totalItems={filteredCount}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                maxVisiblePages={3}
-                                loading={isDataLoading}
-                            />
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={handlePageChange}
+                                    totalItems={totalCount}
+                                    itemsPerPage={pageSize}
+                                    maxVisiblePages={5}
+                                    loading={isDataLoading}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="csp-empty-state">
                             <Icons.User size={48} className="csp-empty-icon" />
                             <h4>No salesmen found</h4>
-                            {searchTerm ? (
+                            {localSearchTerm ? (
                                 <p>Try a different search term</p>
                             ) : (
                                 <p>Create your first salesman to get started</p>
@@ -1117,7 +1233,6 @@ const SalesmanProfile = () => {
 
     return (
         <div className="csp-container">
-            {/* Header */}
             <header className="csp-header">
                 <div className="csp-header-left">
                     <Icons.User size={24} className="csp-header-icon" />
@@ -1133,7 +1248,6 @@ const SalesmanProfile = () => {
                 </div>
             </header>
 
-            {/* Toolbar */}
             <div className="csp-toolbar">
                 <div className="csp-toolbar-group">
                     {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
@@ -1170,7 +1284,6 @@ const SalesmanProfile = () => {
                 </div>
             </div>
 
-            {/* Error Toast */}
             {error && (
                 <div className="csp-toast csp-error">
                     <div className="csp-toast-content">
@@ -1183,7 +1296,6 @@ const SalesmanProfile = () => {
                 </div>
             )}
 
-            {/* Message Toast */}
             {message && (
                 <div className={`csp-toast ${message.includes('❌') ? 'csp-error' : message.includes('⚠️') ? 'csp-warning' : 'csp-success'}`}>
                     <div className="csp-toast-content">
@@ -1198,7 +1310,6 @@ const SalesmanProfile = () => {
                 </div>
             )}
 
-            {/* Main Content */}
             <div className="csp-main-layout">
                 <SalesmanProfileSidebar />
 
