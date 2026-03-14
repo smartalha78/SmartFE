@@ -49,7 +49,7 @@ import HRMSEmployeeFile from "./MasterData/EmployeeFiles/EmployeeManagement";
 import ChartofAccount from "./MasterData/ChartofAccount";
 import IMF from "./MasterData/IMF";
 import CustomerSupplierProfile from "./MasterData/CustomerSupplierProfile";
-// import TransporterProfile from "./MasterData/TransporterProfile";
+import TransporterProfile from "./MasterData/TransporterProfile";
 import SalesManProfile from "./MasterData/SalesManProfile";
 import CityProfile from "./MasterData/CityProfile";
 import OrganizationalChart from "./MasterData/OrganizationalChart";
@@ -1027,9 +1027,9 @@ function Dashboard() {
       case "IMF":
         ModalComponent = IMF;
         break;
-      // case "TransporterProfile":
-      //   ModalComponent = TransporterProfile;
-      //   break;
+      case "TransporterProfile":
+        ModalComponent = TransporterProfile;
+        break;
       case "SalesManProfile":
         ModalComponent = SalesManProfile;
         break;

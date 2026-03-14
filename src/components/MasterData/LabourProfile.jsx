@@ -67,10 +67,15 @@ const formatDateForDB = (date) => {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
+// Get current date in database format
+const getCurrentDateTime = () => {
+    return formatDateForDB(new Date());
+};
+
 /* ---------------------------
- * Initial State (without audit fields)
+ * Initial State (with audit fields)
 ---------------------------- */
-const getInitialLabourData = (offcode = '0101') => ({
+const getInitialLabourData = (offcode = '', currentUser = 'SYSTEM') => ({
     offcode: offcode,
     LabourCode: '',
     LabourName: '',
@@ -79,9 +84,9 @@ const getInitialLabourData = (offcode = '0101') => ({
     billaddress: '',
     zipcode: '',
     CountryID: '1',
-    country: 'Pakistan',
+    country: '',
     CityID: '1',
-    city: 'LAHORE',
+    city: '',
     phone1: '',
     mobile: '0',
     fax: '',
@@ -90,12 +95,18 @@ const getInitialLabourData = (offcode = '0101') => ({
     LabourglCode: '',
     defaultTypePerAmt: '01',
     defaultAmount: '0',
-    LabourType: '01'
+    LabourType: '01',
+    createdby: currentUser,
+    createdate: getCurrentDateTime(),
+    editby: '',
+    editdate: ''
 });
 
-// Prepare data for database insertion/update - WITHOUT audit fields
+// Prepare data for database insertion/update (with audit fields)
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    // Create a clean object with only the fields that exist in the database
+    const currentDateTime = getCurrentDateTime();
+    
+    // Create base object with all fields
     const preparedData = {
         offcode: currentOffcode,
         LabourCode: data.LabourCode || '',
@@ -105,9 +116,9 @@ const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
         billaddress: data.billaddress || '',
         zipcode: data.zipcode || '',
         CountryID: data.CountryID || '1',
-        country: data.country || 'Pakistan',
+        country: data.country || '',
         CityID: data.CityID || '1',
-        city: data.city || 'LAHORE',
+        city: data.city || '',
         phone1: data.phone1 || '',
         mobile: data.mobile || '0',
         fax: data.fax || '',
@@ -118,6 +129,19 @@ const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
         defaultAmount: data.defaultAmount || '0',
         LabourType: data.LabourType || '01'
     };
+
+    // Add audit fields based on mode
+    if (mode === 'new') {
+        preparedData.createdby = currentUser;
+        preparedData.createdate = currentDateTime;
+        preparedData.editby = '';
+        preparedData.editdate = '';
+    } else {
+        preparedData.createdby = data.createdby || currentUser;
+        preparedData.createdate = data.createdate || currentDateTime;
+        preparedData.editby = currentUser;
+        preparedData.editdate = currentDateTime;
+    }
 
     // Remove any undefined values
     Object.keys(preparedData).forEach(key => {
@@ -151,6 +175,59 @@ const useLabourDataService = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [maxCode, setMaxCode] = useState(0);
 
+    // Generic function to fetch table data with offcode filtering
+    const fetchTableData = useCallback(async (tableName, offcode, additionalWhere = '') => {
+        try {
+            let whereClause = '';
+            if (offcode) {
+                const offcodeColumn = tableName === API_CONFIG.TABLES.COUNTRY ? 'offcode' : 
+                                     tableName === API_CONFIG.TABLES.CITY ? 'offcode' :
+                                     tableName === API_CONFIG.TABLES.ACCOUNT ? 'offcode' :
+                                     tableName === API_CONFIG.TABLES.BRANCH ? 'offcode' : 
+                                     tableName === API_CONFIG.TABLES.LABOUR ? 'offcode' : 'offcode';
+                
+                whereClause = `${offcodeColumn} = '${offcode}'`;
+                if (additionalWhere) {
+                    whereClause += ` AND ${additionalWhere}`;
+                }
+            }
+
+            const payload = { 
+                tableName,
+                ...(whereClause && { where: whereClause }),
+                usePagination: false
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            return data.success ? data.rows : [];
+        } catch (err) {
+            console.error(`Error fetching ${tableName}:`, err);
+            return [];
+        }
+    }, []);
+
+    // Function to fetch maximum labour code
+    const fetchMaxLabourCode = useCallback(async (offcode) => {
+        try {
+            const allLabourData = await fetchTableData(API_CONFIG.TABLES.LABOUR, offcode);
+            const codes = allLabourData
+                .map(l => parseInt(normalizeValue(l.LabourCode), 10))
+                .filter(code => !isNaN(code) && code > 0);
+            
+            return codes.length > 0 ? Math.max(...codes) : 0;
+        } catch (err) {
+            console.error('Error fetching max labour code:', err);
+            return 0;
+        }
+    }, [fetchTableData]);
+
     const fetchPaginatedData = useCallback(async (page, size, search) => {
         setIsLoading(true);
         setError('');
@@ -168,7 +245,6 @@ const useLabourDataService = () => {
 
             console.log(`Fetching labour for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}`);
             
-            // Build where clause for search if needed
             let whereClause = `offcode = '${currentOffcode}'`;
             if (search) {
                 whereClause += ` AND (LabourCode LIKE '%${search}%' OR LabourName LIKE '%${search}%')`;
@@ -195,13 +271,17 @@ const useLabourDataService = () => {
             if (data.success) {
                 setLabourData(data.rows || []);
                 setTotalCount(data.totalCount || 0);
+                
+                // Fetch max code after getting data
+                const max = await fetchMaxLabourCode(currentOffcode);
+                setMaxCode(max);
+                
+                // Fetch lookup data
+                await fetchLookupData(currentOffcode);
             } else {
                 setLabourData([]);
                 setTotalCount(0);
             }
-
-            // Fetch lookup data separately (non-paginated)
-            await fetchLookupData(currentOffcode);
 
         } catch (err) {
             console.error('Error fetching data:', err);
@@ -211,7 +291,7 @@ const useLabourDataService = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [credentials]);
+    }, [credentials, fetchTableData, fetchMaxLabourCode]);
 
     const fetchLookupData = useCallback(async (offcode) => {
         try {
@@ -219,14 +299,12 @@ const useLabourDataService = () => {
                 countryData,
                 cityData,
                 glAccountData,
-                branchData,
-                allLabourData
+                branchData
             ] = await Promise.all([
                 fetchTableData(API_CONFIG.TABLES.COUNTRY, offcode),
                 fetchTableData(API_CONFIG.TABLES.CITY, offcode),
                 fetchTableData(API_CONFIG.TABLES.ACCOUNT, offcode),
-                fetchTableData(API_CONFIG.TABLES.BRANCH, offcode),
-                fetchTableData(API_CONFIG.TABLES.LABOUR, offcode, false) // Get all labour for max code calculation
+                fetchTableData(API_CONFIG.TABLES.BRANCH, offcode)
             ]);
 
             const filteredGLAccounts = glAccountData
@@ -254,41 +332,10 @@ const useLabourDataService = () => {
                 branchData: currentBranch
             });
 
-            // Calculate max code from all labour records
-            const codes = allLabourData
-                .map(l => parseInt(normalizeValue(l.LabourCode), 10))
-                .filter(code => !isNaN(code) && code > 0);
-            
-            const max = codes.length > 0 ? Math.max(...codes) : 0;
-            setMaxCode(max);
-
         } catch (err) {
             console.error('Error fetching lookup data:', err);
         }
-    }, []);
-
-    const fetchTableData = async (tableName, offcode, paginated = false) => {
-        try {
-            const whereClause = `offcode = '${offcode}'`;
-            const payload = { 
-                tableName,
-                where: whereClause,
-                usePagination: paginated
-            };
-            
-            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            return data.success ? data.rows : [];
-        } catch (err) {
-            console.error(`Error fetching ${tableName}:`, err);
-            return [];
-        }
-    };
+    }, [fetchTableData]);
 
     // Load data whenever pagination or search changes
     useEffect(() => {
@@ -336,7 +383,7 @@ const useLabourDataService = () => {
 };
 
 /* ---------------------------
- * Labour Profile Form Component
+ * Labour Profile Form Component (with Audit Section)
 ---------------------------- */
 const LabourProfileForm = ({
     formData,
@@ -350,12 +397,14 @@ const LabourProfileForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+    const currentUser = credentials?.username || 'SYSTEM';
 
     const {
         LabourCode, LabourName, isactive, contact, billaddress, zipcode,
         CountryID, CityID, phone1, mobile, fax, email, paymentmethod,
-        LabourglCode, defaultTypePerAmt, defaultAmount, LabourType
+        LabourglCode, defaultTypePerAmt, defaultAmount, LabourType,
+        createdby, createdate, editby, editdate
     } = formData;
 
     const { countries, cities, glAccounts, branchData } = lookupData;
@@ -367,6 +416,17 @@ const LabourProfileForm = ({
     const isNewMode = currentMode === 'new';
     const availableCities = cities.filter(c => c.countryId === CountryID);
     const canEdit = hasPermission && hasPermission(menuId, isNewMode ? 'add' : 'edit');
+
+    // Format date for display
+    const formatDisplayDate = (dateString) => {
+        if (!dateString) return 'Not set';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        } catch {
+            return dateString;
+        }
+    };
 
     const paymentMethods = [
         { code: '1', name: 'Cash' },
@@ -686,6 +746,41 @@ const LabourProfileForm = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Audit Information */}
+                <div className="csp-form-section csp-audit-section">
+                    <h4><Icons.Clock size={18} /> Audit Information</h4>
+                    <div className="csp-form-grid csp-grid-2">
+                        <div className="csp-field-group">
+                            <label>Created By</label>
+                            <div className="csp-field-display">
+                                <Icons.User size={16} />
+                                <span>{createdby || (isNewMode ? 'Will be set on save' : 'N/A')}</span>
+                            </div>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Created Date</label>
+                            <div className="csp-field-display">
+                                <Icons.Calendar size={16} />
+                                <span>{createdate ? formatDisplayDate(createdate) : (isNewMode ? 'Will be set on save' : 'Not set')}</span>
+                            </div>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Last Edited By</label>
+                            <div className="csp-field-display">
+                                <Icons.User size={16} />
+                                <span>{editby || (isNewMode ? 'Not edited yet' : 'N/A')}</span>
+                            </div>
+                        </div>
+                        <div className="csp-field-group">
+                            <label>Last Edited Date</label>
+                            <div className="csp-field-display">
+                                <Icons.Calendar size={16} />
+                                <span>{editdate ? formatDisplayDate(editdate) : (isNewMode ? 'Not edited yet' : 'Not set')}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -697,7 +792,7 @@ const LabourProfileForm = ({
 const LabourProfile = () => {
     const { credentials } = useAuth();
     const { hasPermission, loading: rightsLoading } = useRights();
-    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '0101';
+    const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
     const currentUser = credentials?.username || 'SYSTEM';
     const sidebarRef = useRef(null);
 
@@ -719,7 +814,7 @@ const LabourProfile = () => {
     } = useLabourDataService();
 
     const [selectedLabour, setSelectedLabour] = useState(null);
-    const [formData, setFormData] = useState(() => getInitialLabourData(currentOffcode));
+    const [formData, setFormData] = useState(() => getInitialLabourData(currentOffcode, currentUser));
     const [currentMode, setCurrentMode] = useState('new');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
@@ -757,7 +852,7 @@ const LabourProfile = () => {
         return () => clearTimeout(timer);
     }, [localSearchTerm, searchTerm, setSearch]);
 
-    // Generate labour code based on maxCode from all records (10-digit)
+    // Generate labour code based on maxCode from all records
     const generateLabourCode = useCallback(() => {
         const nextCode = maxCode + 1;
         return nextCode.toString().padStart(10, '0');
@@ -771,24 +866,46 @@ const LabourProfile = () => {
             const newCode = generateLabourCode();
 
             setFormData({
-                ...getInitialLabourData(currentOffcode),
+                ...getInitialLabourData(currentOffcode, currentUser),
                 LabourCode: newCode,
                 CountryID: defaultCountryId,
                 CityID: defaultCityId,
-                country: lookupData.countries.find(c => c.id === defaultCountryId)?.name || 'Pakistan',
-                city: lookupData.cities.find(c => c.id === defaultCityId)?.name || 'LAHORE',
                 LabourglCode: lookupData.glAccounts[0]?.code || ''
             });
+            
+            setMessage(`Ready to create new labour. Auto-generated code: ${newCode}`);
         }
-    }, [currentMode, currentOffcode, lookupData, generateLabourCode, selectedLabour]);
+    }, [currentMode, currentOffcode, currentUser, lookupData, generateLabourCode, selectedLabour]);
 
     // Load selected labour data into form
     useEffect(() => {
         if (selectedLabour && currentMode === 'edit') {
-            const normalizedLabour = Object.keys(getInitialLabourData()).reduce((acc, key) => {
-                acc[key] = normalizeValue(selectedLabour[key] || getInitialLabourData()[key]);
-                return acc;
-            }, {});
+            const normalizedLabour = {
+                offcode: normalizeValue(selectedLabour.offcode),
+                LabourCode: normalizeValue(selectedLabour.LabourCode),
+                LabourName: normalizeValue(selectedLabour.LabourName),
+                isactive: normalizeValue(selectedLabour.isactive),
+                contact: normalizeValue(selectedLabour.contact),
+                billaddress: normalizeValue(selectedLabour.billaddress),
+                zipcode: normalizeValue(selectedLabour.zipcode),
+                CountryID: normalizeValue(selectedLabour.CountryID),
+                country: normalizeValue(selectedLabour.country),
+                CityID: normalizeValue(selectedLabour.CityID),
+                city: normalizeValue(selectedLabour.city),
+                phone1: normalizeValue(selectedLabour.phone1),
+                mobile: normalizeValue(selectedLabour.mobile),
+                fax: normalizeValue(selectedLabour.fax),
+                email: normalizeValue(selectedLabour.email),
+                paymentmethod: normalizeValue(selectedLabour.paymentmethod),
+                LabourglCode: normalizeValue(selectedLabour.LabourglCode),
+                defaultTypePerAmt: normalizeValue(selectedLabour.defaultTypePerAmt),
+                defaultAmount: normalizeValue(selectedLabour.defaultAmount),
+                LabourType: normalizeValue(selectedLabour.LabourType),
+                createdby: normalizeValue(selectedLabour.createdby),
+                createdate: normalizeValue(selectedLabour.createdate),
+                editby: normalizeValue(selectedLabour.editby),
+                editdate: normalizeValue(selectedLabour.editdate)
+            };
 
             setFormData(normalizedLabour);
         }
@@ -837,12 +954,23 @@ const LabourProfile = () => {
             return;
         }
 
+        // Check for duplicate code
+        const duplicateCode = labourData.find(l =>
+            l.LabourCode === formData.LabourCode &&
+            (currentMode === 'new' || l.LabourCode !== selectedLabour?.LabourCode)
+        );
+
+        if (duplicateCode) {
+            setMessage('❌ A labour with this code already exists!');
+            return;
+        }
+
         setIsSaving(true);
         setMessage('');
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database - WITHOUT audit fields
+        // Prepare data for database with audit fields
         const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
@@ -857,8 +985,6 @@ const LabourProfile = () => {
             };
         }
 
-        console.log('Sending payload:', payload);
-
         try {
             const resp = await fetch(endpoint, {
                 method: 'POST',
@@ -868,22 +994,18 @@ const LabourProfile = () => {
 
             if (!resp.ok) {
                 const errorText = await resp.text();
-                console.log('Error Response:', errorText);
                 throw new Error(`HTTP ${resp.status}: ${errorText}`);
             }
 
             const result = await resp.json();
-            console.log('Save result:', result);
 
             if (result.success) {
                 setMessage('✅ Labour saved successfully!');
                 await refetch();
 
                 if (currentMode === 'new') {
-                    // For new records, stay in edit mode with the new record selected
                     const newRecord = {
-                        ...preparedData,
-                        LabourName: preparedData.LabourName
+                        ...preparedData
                     };
                     
                     setSelectedLabour(newRecord);
@@ -939,7 +1061,6 @@ const LabourProfile = () => {
             if (result.success) {
                 setMessage('✅ Labour deleted successfully!');
                 
-                // Check if current page is now empty and we're not on page 1
                 if (labourData.length === 1 && currentPage > 1) {
                     goToPage(currentPage - 1);
                 } else {
@@ -1039,6 +1160,14 @@ const LabourProfile = () => {
                                                     {isActiveValue(labour.isactive) ? 'Active' : 'Inactive'}
                                                 </span>
                                             </div>
+                                            {normalizeValue(labour.createdby) && (
+                                                <div className="csp-profile-audit">
+                                                    <small>Created: {normalizeValue(labour.createdby)}</small>
+                                                    {normalizeValue(labour.editby) && (
+                                                        <small> | Edited: {normalizeValue(labour.editby)}</small>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         {hasPermission && hasPermission(menuId, 'delete') && (
                                             <button

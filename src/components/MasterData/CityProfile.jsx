@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import "./ChartofAccount.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
@@ -25,7 +25,13 @@ const API_CONFIG = {
 /* ---------------------------
  * Auth Hook
 ---------------------------- */
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 /* ---------------------------
  * Utilities
@@ -58,112 +64,251 @@ const formatDateForDB = (date) => {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
+// Extract numeric value from ID (remove leading zeros if any)
+const getNumericId = (id) => {
+    if (!id) return 0;
+    return parseInt(id, 10) || 0;
+};
+
 /* ---------------------------
- * Initial State
+ * Initial State (without audit fields)
 ---------------------------- */
-const getInitialCityData = (offcode = '0101') => ({
+const getInitialCityData = (offcode = '1010') => ({
     CountryID: '',
     CityID: '',
     RegionID: '1',
     CityName: '',
     IsActive: 'true',
-    offcode: offcode,
-    createdby: '',
-    createdate: new Date().toISOString().split('T')[0],
-    editby: '',
-    editdate: new Date().toISOString().split('T')[0]
+    offcode: offcode
 });
 
-// Prepare data for database insertion/update
+// Prepare data for database insertion/update - WITHOUT audit fields
 const prepareDataForDB = (data, mode, currentUser, currentOffcode) => {
-    const now = new Date();
-    const formattedNow = formatDateForDB(now);
-    
+    // Helper function to convert empty strings to null for optional fields
+    const toDBValue = (value) => {
+        if (value === undefined || value === '') return null;
+        return value;
+    };
+
     const preparedData = {
         offcode: currentOffcode,
         CountryID: data.CountryID || '',
         CityID: data.CityID || '',
         RegionID: data.RegionID || '1',
         CityName: data.CityName || '',
-        IsActive: isActiveValue(data.IsActive) ? 'True' : 'False',
-        createdby: mode === 'new' ? currentUser : data.createdby || currentUser,
-        createdate: mode === 'new' ? formattedNow : data.createdate || formattedNow,
-        editby: currentUser,
-        editdate: formattedNow
+        IsActive: isActiveValue(data.IsActive) ? 'True' : 'False'
     };
 
     // Remove any undefined values
     Object.keys(preparedData).forEach(key => {
         if (preparedData[key] === undefined) {
-            preparedData[key] = '';
+            delete preparedData[key];
         }
     });
+
+    console.log('Prepared data for DB (no audit fields):', preparedData);
 
     return preparedData;
 };
 
 /* ---------------------------
- * Data Service Hook
+ * Data Service with Server-Side Pagination
 ---------------------------- */
 const useCityDataService = () => {
     const { credentials } = useAuth();
-    const [countries, setCountries] = useState([]);
     const [cities, setCities] = useState([]);
+    const [allCities, setAllCities] = useState([]); // Store ALL cities for code generation
+    const [totalCount, setTotalCount] = useState(0);
+    const [countries, setCountries] = useState([]);
+    const [allCountries, setAllCountries] = useState([]); // Store ALL countries for dropdown
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCountryId, setSelectedCountryId] = useState('');
 
-    const fetchTableData = async (tableName) => {
+    // Fetch ALL cities for code generation (non-paginated)
+    const fetchAllCities = useCallback(async (offcode) => {
         try {
-            const payload = { tableName };
+            console.log('Fetching ALL cities for code generation...');
+            const whereClause = `offcode = '${offcode}'`;
+            const payload = {
+                tableName: API_CONFIG.TABLES.CITIES,
+                where: whereClause,
+                usePagination: false // Get ALL records
+            };
+
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            return data.success ? data.rows : [];
-        } catch (err) {
-            console.error(`Error fetching ${tableName}:`, err);
-            return [];
-        }
-    };
 
-    const loadAllData = useCallback(async () => {
+            if (data.success) {
+                setAllCities(data.rows || []);
+                console.log('All cities count:', data.rows?.length);
+            }
+        } catch (err) {
+            console.error('Error fetching all cities:', err);
+        }
+    }, []);
+
+    const fetchPaginatedData = useCallback(async (page, size, search, countryId) => {
         setIsLoading(true);
         setError('');
 
         try {
-            const currentOffcode = normalizeValue(credentials?.company?.offcode) || '0101';
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
 
-            const [countryData, cityData] = await Promise.all([
-                fetchTableData(API_CONFIG.TABLES.COUNTRY),
-                fetchTableData(API_CONFIG.TABLES.CITIES)
-            ]);
+            if (!currentOffcode) {
+                console.warn('No offcode found in credentials');
+                setCities([]);
+                setTotalCount(0);
+                setIsLoading(false);
+                return;
+            }
 
-            const filteredCountries = countryData.filter(c =>
-                normalizeValue(c.offcode) === currentOffcode
-            );
+            console.log(`Fetching cities for offcode: ${currentOffcode}, page: ${page}, size: ${size}, search: ${search}, country: ${countryId}`);
 
-            const filteredCities = cityData.filter(c =>
-                normalizeValue(c.offcode) === currentOffcode
-            );
+            // Build where clause
+            let whereClause = `offcode = '${currentOffcode}'`;
+            if (countryId) {
+                whereClause += ` AND CountryID = '${countryId}'`;
+            }
+            if (search) {
+                whereClause += ` AND (CityName LIKE '%${search}%' OR CityID LIKE '%${search}%')`;
+            }
 
-            setCountries(filteredCountries);
-            setCities(filteredCities);
+            const payload = {
+                tableName: API_CONFIG.TABLES.CITIES,
+                where: whereClause,
+                page: page,
+                limit: size,
+                usePagination: true
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+            const data = await resp.json();
+
+            if (data.success) {
+                setCities(data.rows || []);
+                setTotalCount(data.totalCount || 0);
+            } else {
+                setCities([]);
+                setTotalCount(0);
+            }
+
+            // Fetch ALL cities once for code generation (only if not already loaded)
+            if (allCities.length === 0) {
+                await fetchAllCities(currentOffcode);
+            }
 
         } catch (err) {
+            console.error('Error fetching data:', err);
             setError(`Failed to load data: ${err.message}`);
+            setCities([]);
+            setTotalCount(0);
         } finally {
             setIsLoading(false);
         }
+    }, [credentials, allCities.length, fetchAllCities]);
+
+    // Fetch countries separately (non-paginated)
+    const fetchCountries = useCallback(async () => {
+        try {
+            const currentOffcode = credentials?.offcode || credentials?.company?.offcode || '';
+            const whereClause = `offcode = '${currentOffcode}'`;
+            const payload = {
+                tableName: API_CONFIG.TABLES.COUNTRY,
+                where: whereClause,
+                usePagination: false
+            };
+
+            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+
+            if (data.success) {
+                setCountries(data.rows || []);
+                setAllCountries(data.rows || []);
+            }
+        } catch (err) {
+            console.error('Error fetching countries:', err);
+        }
     }, [credentials]);
 
+    // Load data whenever pagination, search, or country selection changes
     useEffect(() => {
-        loadAllData();
-    }, [loadAllData]);
+        fetchPaginatedData(currentPage, pageSize, searchTerm, selectedCountryId);
+    }, [currentPage, pageSize, searchTerm, selectedCountryId, fetchPaginatedData]);
 
-    return { countries, cities, isLoading, error, refetch: loadAllData, setError };
+    // Load countries on mount
+    useEffect(() => {
+        fetchCountries();
+    }, [fetchCountries]);
+
+    const refetch = useCallback(() => {
+        fetchPaginatedData(currentPage, pageSize, searchTerm, selectedCountryId);
+    }, [currentPage, pageSize, searchTerm, selectedCountryId, fetchPaginatedData]);
+
+    const goToPage = (page) => {
+        console.log(`Changing to page: ${page}`);
+        setCurrentPage(page);
+    };
+
+    const setSearch = (term) => {
+        setSearchTerm(term);
+        setCurrentPage(1);
+    };
+
+    const setCountryFilter = (countryId) => {
+        setSelectedCountryId(countryId);
+        setCurrentPage(1);
+    };
+
+    const updatePageSize = (size) => {
+        setPageSize(size);
+        setCurrentPage(1);
+    };
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    return {
+        cities,
+        allCities,
+        countries,
+        allCountries,
+        totalCount,
+        totalPages,
+        isLoading,
+        error,
+        refetch,
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        selectedCountryId,
+        setCountryFilter,
+        updatePageSize
+    };
 };
 
 /* ---------------------------
@@ -181,7 +326,7 @@ const CityForm = ({
     menuId
 }) => {
     const { credentials } = useAuth();
-    const currentOffcode = normalizeValue(credentials?.company?.offcode) || '0101';
+    const currentOffcode = normalizeValue(credentials?.offcode || credentials?.company?.offcode) || '1010';
 
     const {
         CountryID,
@@ -277,9 +422,8 @@ const CityForm = ({
                             <input
                                 type="text"
                                 value={CityID}
-                                onChange={e => handleInput('CityID', e.target.value)}
-                                placeholder={isNewMode ? "Auto-generated" : "City ID"}
                                 disabled={true}
+                                placeholder={isNewMode ? "Auto-generated" : "City ID"}
                                 className="csp-form-input csp-disabled-field"
                             />
                             {isNewMode && (
@@ -324,25 +468,41 @@ const CityForm = ({
 ---------------------------- */
 const CityProfile = () => {
     const { credentials } = useAuth();
-    const { hasPermission, loading: rightsLoading, error: rightsError } = useRights();
-    const currentOffcode = normalizeValue(credentials?.company?.offcode) || '0101';
+    const { hasPermission, loading: rightsLoading } = useRights();
+    const currentOffcode = normalizeValue(credentials?.offcode || credentials?.company?.offcode) || '1010';
     const currentUser = credentials?.username || 'SYSTEM';
+    const sidebarRef = useRef(null);
+    const headerRef = useRef(null);
+    const filterRef = useRef(null);
 
-    const { countries, cities, isLoading: isDataLoading, error, refetch, setError } = useCityDataService();
+    const {
+        cities,
+        allCities,
+        countries,
+        totalCount,
+        totalPages,
+        isLoading: isDataLoading,
+        error,
+        refetch,
+        setError,
+        currentPage,
+        pageSize,
+        goToPage,
+        searchTerm,
+        setSearch,
+        selectedCountryId,
+        setCountryFilter,
+        updatePageSize
+    } = useCityDataService();
 
     const [selectedCity, setSelectedCity] = useState(null);
     const [formData, setFormData] = useState(() => getInitialCityData(currentOffcode));
     const [currentMode, setCurrentMode] = useState('new');
-    const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
-    const [screenConfig, setScreenConfig] = useState(null);
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
-    const [paginatedCities, setPaginatedCities] = useState([]);
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
+    const [sidebarHeight, setSidebarHeight] = useState('calc(100vh - 280px)');
 
     // Load screen configuration
     useEffect(() => {
@@ -355,7 +515,6 @@ const CityProfile = () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    setScreenConfig(data.screen);
                     setMenuId(data.screen.id);
                 }
             } catch (error) {
@@ -365,58 +524,90 @@ const CityProfile = () => {
         loadScreenConfig();
     }, []);
 
-    // Filter cities based on selected country and search term
-    const filteredCities = cities.filter(city => {
-        const matchesCountry = !formData.CountryID || city.CountryID === formData.CountryID;
-        const normalizedSearchTerm = searchTerm.toLowerCase();
-        const matchesSearch = !normalizedSearchTerm || 
-            normalizeValue(city.CityName).toLowerCase().includes(normalizedSearchTerm) ||
-            normalizeValue(city.CityID).includes(normalizedSearchTerm);
-        return matchesCountry && matchesSearch;
-    });
-
-    // Update paginated cities
+    // Handle search with debounce
     useEffect(() => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        setPaginatedCities(filteredCities.slice(startIndex, endIndex));
-    }, [filteredCities, currentPage, itemsPerPage]);
+        const timer = setTimeout(() => {
+            if (localSearchTerm !== searchTerm) {
+                setSearch(localSearchTerm);
+            }
+        }, 500);
 
-    // Reset page when country changes
+        return () => clearTimeout(timer);
+    }, [localSearchTerm, searchTerm, setSearch]);
+
+    // Update sidebar height based on header heights
     useEffect(() => {
-        setCurrentPage(1);
-    }, [formData.CountryID, searchTerm]);
+        const updateSidebarHeight = () => {
+            if (headerRef.current && filterRef.current) {
+                const headerHeight = headerRef.current.offsetHeight;
+                const filterHeight = filterRef.current.offsetHeight;
+                const totalHeaderHeight = headerHeight + filterHeight + 40; // Add padding
+                setSidebarHeight(`calc(100vh - ${totalHeaderHeight}px)`);
+            }
+        };
 
-    const generateCityId = useCallback((countryId) => {
-        if (!countryId) return '';
+        updateSidebarHeight();
+        window.addEventListener('resize', updateSidebarHeight);
+        
+        // Small delay to ensure DOM is ready
+        setTimeout(updateSidebarHeight, 100);
+        
+        return () => window.removeEventListener('resize', updateSidebarHeight);
+    }, []);
 
-        const countryCities = cities.filter(c => c.CountryID === countryId);
-        const existingCodes = countryCities
-            .map(c => {
-                const id = parseInt(normalizeValue(c.CityID), 10);
-                return isNaN(id) ? 0 : id;
-            })
+    // Get the true maximum CityID for a specific country from ALL cities
+    const getMaxCityIdForCountry = useCallback((countryId) => {
+        if (!countryId) return 0;
+        
+        // Use allCities if available, otherwise fall back to paginated cities
+        const sourceCities = allCities.length > 0 ? allCities : cities;
+        
+        const numericIds = sourceCities
+            .filter(c => c.CountryID === countryId && c.offcode === currentOffcode)
+            .map(c => getNumericId(c.CityID))
             .filter(id => id > 0);
         
-        const maxId = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
-        return (maxId + 1).toString();
-    }, [cities]);
+        return numericIds.length > 0 ? Math.max(...numericIds) : 0;
+    }, [allCities, cities, currentOffcode]);
+
+    // Generate City ID based on selected country
+    const generateCityId = useCallback((countryId) => {
+        if (!countryId) return '';
+        
+        const maxId = getMaxCityIdForCountry(countryId);
+        const nextId = maxId + 1;
+        
+        console.log('Generating City ID:', {
+            countryId,
+            maxId,
+            nextId,
+            source: allCities.length > 0 ? 'allCities' : 'cities'
+        });
+        
+        return nextId.toString();
+    }, [getMaxCityIdForCountry, allCities.length, cities.length]);
 
     // Initialize form for new city
     useEffect(() => {
-        if (currentMode === 'new') {
-            const defaultCountryId = formData.CountryID || countries[0]?.CountryID || '';
+        if (currentMode === 'new' && !selectedCity) {
+            // Use the selected country filter or first country
+            const defaultCountryId = selectedCountryId || countries[0]?.CountryID || '';
             const newCityId = generateCityId(defaultCountryId);
 
-            setFormData(prev => ({
+            setFormData({
                 ...getInitialCityData(currentOffcode),
                 CountryID: defaultCountryId,
                 CityID: newCityId,
-                createdby: currentUser,
-                editby: currentUser
-            }));
+                RegionID: '1',
+                IsActive: 'true'
+            });
+
+            // Update country filter if not set
+            if (!selectedCountryId && defaultCountryId) {
+                setCountryFilter(defaultCountryId);
+            }
         }
-    }, [currentMode, currentOffcode, currentUser, countries, generateCityId]);
+    }, [currentMode, currentOffcode, countries, generateCityId, selectedCity, selectedCountryId, setCountryFilter]);
 
     // Load selected city for editing
     useEffect(() => {
@@ -435,9 +626,12 @@ const CityProfile = () => {
             let newState = { ...prev, [field]: value };
             
             // Auto-generate City ID when country changes in new mode
-            if (field === 'CountryID' && currentMode === 'new') {
+            if (field === 'CountryID' && currentMode === 'new' && value) {
                 const newCityId = generateCityId(value);
                 newState.CityID = newCityId;
+                
+                // Update country filter when country changes
+                setCountryFilter(value);
             }
             
             return newState;
@@ -452,6 +646,11 @@ const CityProfile = () => {
         setSelectedCity(city);
         setCurrentMode('edit');
         setMessage(`Editing: ${normalizeValue(city.CityName)}`);
+        
+        // Update country filter to show cities from the same country
+        if (city.CountryID) {
+            setCountryFilter(city.CountryID);
+        }
     };
 
     const handleNewCity = () => {
@@ -480,16 +679,37 @@ const CityProfile = () => {
             return;
         }
 
-        // Check for duplicate city name in the same country
-        const duplicateCity = cities.find(c => 
-            c.CountryID === formData.CountryID && 
-            normalizeValue(c.CityName).toLowerCase() === formData.CityName.toLowerCase() &&
-            (currentMode === 'new' || c.CityID !== formData.CityID)
-        );
+        // For new records, verify the ID is still available using ALL cities
+        if (currentMode === 'new') {
+            const sourceCities = allCities.length > 0 ? allCities : cities;
+            
+            const existingCity = sourceCities.find(c => 
+                c.CountryID === formData.CountryID && 
+                c.CityID === formData.CityID &&
+                c.offcode === currentOffcode
+            );
 
-        if (duplicateCity) {
-            setMessage('❌ A city with this name already exists in the selected country!');
-            return;
+            if (existingCity) {
+                // ID already exists, generate a new one
+                const newCityId = generateCityId(formData.CountryID);
+                setFormData(prev => ({ ...prev, CityID: newCityId }));
+                setMessage('⚠️ City ID was taken, generating new ID...');
+                setIsSaving(false);
+                return;
+            }
+
+            // Check for duplicate city name in the same country
+            const duplicateName = sourceCities.find(c => 
+                c.CountryID === formData.CountryID && 
+                normalizeValue(c.CityName).toLowerCase() === formData.CityName.toLowerCase() &&
+                c.offcode === currentOffcode
+            );
+
+            if (duplicateName) {
+                setMessage('❌ A city with this name already exists in the selected country!');
+                setIsSaving(false);
+                return;
+            }
         }
 
         setIsSaving(true);
@@ -497,7 +717,7 @@ const CityProfile = () => {
 
         const endpoint = currentMode === 'new' ? API_CONFIG.INSERT_RECORD : API_CONFIG.UPDATE_RECORD;
 
-        // Prepare data for database
+        // Prepare data for database - WITHOUT audit fields
         const preparedData = prepareDataForDB(formData, currentMode, currentUser, currentOffcode);
 
         const payload = {
@@ -513,6 +733,8 @@ const CityProfile = () => {
             };
         }
 
+        console.log('Sending payload:', JSON.stringify(payload, null, 2));
+
         try {
             const resp = await fetch(endpoint, {
                 method: 'POST',
@@ -521,10 +743,27 @@ const CityProfile = () => {
             });
 
             if (!resp.ok) {
-                throw new Error(`HTTP ${resp.status}`);
+                const errorText = await resp.text();
+                console.log('Error Response:', errorText);
+
+                // Check for duplicate key errors
+                if (errorText.includes('duplicate key') || errorText.includes('2627')) {
+                    if (currentMode === 'new') {
+                        const newCityId = generateCityId(formData.CountryID);
+                        setFormData(prev => ({ ...prev, CityID: newCityId }));
+                        setMessage('⚠️ City ID was taken, please try saving again');
+                    } else {
+                        setMessage('❌ Cannot update: Duplicate key violation');
+                    }
+                    setIsSaving(false);
+                    return;
+                }
+
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
             }
 
             const result = await resp.json();
+            console.log('Save result:', result);
 
             if (result.success) {
                 setMessage('✅ City saved successfully!');
@@ -532,14 +771,14 @@ const CityProfile = () => {
 
                 if (currentMode === 'new') {
                     // Find the newly created city
-                    const newCity = cities.find(c =>
-                        c.CityID === formData.CityID && 
-                        c.CountryID === formData.CountryID && 
-                        c.offcode === currentOffcode
-                    ) || { ...formData };
+                    const newCity = {
+                        ...preparedData,
+                        CityName: preparedData.CityName
+                    };
                     
                     setSelectedCity(newCity);
                     setCurrentMode('edit');
+                    setFormData(newCity);
                 }
             } else {
                 setMessage(`❌ Save failed: ${result.message || 'Unknown error'}`);
@@ -590,7 +829,13 @@ const CityProfile = () => {
 
             if (result.success) {
                 setMessage('✅ City deleted successfully!');
-                await refetch();
+                
+                // Check if current page is now empty and we're not on page 1
+                if (cities.length === 1 && currentPage > 1) {
+                    goToPage(currentPage - 1);
+                } else {
+                    await refetch();
+                }
                 
                 if (selectedCity?.CityID === city.CityID && selectedCity?.CountryID === city.CountryID) {
                     handleNewCity();
@@ -608,16 +853,32 @@ const CityProfile = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        console.log(`Page change requested to: ${page}`);
+        goToPage(page);
+        if (sidebarRef.current) {
+            sidebarRef.current.scrollTop = 0;
+        }
     };
 
-    const filteredCount = filteredCities.length;
+    const handleCountryChange = (e) => {
+        const countryId = e.target.value;
+        setCountryFilter(countryId);
+        if (currentMode === 'new') {
+            setFormData(prev => ({
+                ...prev,
+                CountryID: countryId,
+                CityID: generateCityId(countryId)
+            }));
+        }
+    };
+
     const selectedCountry = countries.find(c => c.CountryID === formData.CountryID);
+    const filteredCount = totalCount; // Use totalCount from server
 
     const CityManagementSidebar = () => {
         return (
             <aside className="csp-sidebar">
-                <div className="csp-sidebar-header">
+                <div className="csp-sidebar-header" ref={headerRef}>
                     <div className="csp-sidebar-title">
                         <Icons.MapPin size={20} />
                         <h3>Cities</h3>
@@ -631,8 +892,8 @@ const CityProfile = () => {
                             <input
                                 type="text"
                                 placeholder="Search by name or ID..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
+                                value={localSearchTerm}
+                                onChange={e => setLocalSearchTerm(e.target.value)}
                                 className="csp-search-input"
                             />
                         </div>
@@ -647,16 +908,49 @@ const CityProfile = () => {
                     </div>
                 </div>
 
-                <div className="csp-sidebar-content">
+                <div 
+                    className="csp-sidebar-header" 
+                    ref={filterRef}
+                    style={{ 
+                        paddingTop: 0, 
+                        paddingBottom: '0.75rem',
+                        borderBottom: '1px solid var(--gray-200)'
+                    }}
+                >
+                    <select
+                        value={selectedCountryId || ''}
+                        onChange={handleCountryChange}
+                        className="csp-form-select"
+                        style={{ width: '100%' }}
+                    >
+                        <option value="">All Countries</option>
+                        {countries.map(country => (
+                            <option key={country.CountryID} value={country.CountryID}>
+                                {country.CountryName}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div
+                    className="csp-sidebar-content"
+                    ref={sidebarRef}
+                    style={{
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        height: sidebarHeight,
+                        scrollBehavior: 'smooth'
+                    }}
+                >
                     {isDataLoading && cities.length === 0 ? (
                         <div className="csp-loading-state">
                             <Icons.Loader size={32} className="csp-spin" />
                             <p>Loading Cities...</p>
                         </div>
-                    ) : paginatedCities.length > 0 ? (
+                    ) : cities.length > 0 ? (
                         <>
                             <div className="csp-profile-list">
-                                {paginatedCities.map(city => (
+                                {cities.map(city => (
                                     <div
                                         key={`${city.CountryID}-${city.CityID}`}
                                         className={`csp-profile-item ${
@@ -698,23 +992,26 @@ const CityProfile = () => {
                                 ))}
                             </div>
                             
-                            <Pagination
-                                currentPage={currentPage}
-                                totalItems={filteredCount}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={handlePageChange}
-                                maxVisiblePages={3}
-                                loading={isDataLoading}
-                            />
+                            {totalPages > 1 && (
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={handlePageChange}
+                                    totalItems={totalCount}
+                                    itemsPerPage={pageSize}
+                                    maxVisiblePages={5}
+                                    loading={isDataLoading}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="csp-empty-state">
                             <Icons.MapPin size={48} className="csp-empty-icon" />
                             <h4>No cities found</h4>
-                            {searchTerm ? (
+                            {localSearchTerm ? (
                                 <p>Try a different search term</p>
-                            ) : !formData.CountryID ? (
-                                <p>Select a country in the form to view cities</p>
+                            ) : !selectedCountryId ? (
+                                <p>Select a country to view cities</p>
                             ) : (
                                 <p>Create your first city in this country to get started</p>
                             )}
