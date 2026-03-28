@@ -2193,7 +2193,7 @@ const EmployeeManagement = () => {
     const visibleSections = getVisibleSections();
 
     return (
-      <div className="basic-info">
+      <div className="Employee-basic-info">
         {/* Header Navigation */}
         <div className="header-navigation">
           {headerSections.map(header => (
@@ -2452,6 +2452,12 @@ const EmployeeManagement = () => {
       </div>
     );
   };
+  const formatMoney = (amount) => {
+  return Number(amount || 0).toLocaleString("en-PK", {
+        minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+  });
+};
 
   // Show loading while rights are loading
   if (rightsLoading && !menuId) {
@@ -2477,7 +2483,7 @@ const EmployeeManagement = () => {
         />
       )}
 
-      {!selectedEmployee && !isEditing && (
+      {/* {!selectedEmployee && !isEditing && (
         <DocumentStatusBar
           statuses={documentStatusesAll}
           selectedStatus={selectedStatus}
@@ -2486,7 +2492,7 @@ const EmployeeManagement = () => {
           showCounts={true}
           counts={statusCounts}
         />
-      )}
+      )} */}
 
       {selectedEmployee || isEditing ? (
         <div className="employee-details">
@@ -2539,7 +2545,14 @@ const EmployeeManagement = () => {
               >
                 <FaUsers /> Basic
               </button>
-
+              {(!menuId || hasPermission(menuId, 'view')) && (
+                <button
+                  className={`tab-btn ${activeTab === "attendance" ? "active" : ""}`}
+                  onClick={() => handleTabChange("attendance")}
+                >
+                  <FaClock /> Attendance
+                </button>
+              )}
               {(!menuId || hasPermission(menuId, 'view')) && (
                 <button
                   className={`tab-btn ${activeTab === "academic" ? "active" : ""}`}
@@ -2582,15 +2595,6 @@ const EmployeeManagement = () => {
                   onClick={() => handleTabChange("family")}
                 >
                   <FaUsers /> Family
-                </button>
-              )}
-
-              {(!menuId || hasPermission(menuId, 'view')) && (
-                <button
-                  className={`tab-btn ${activeTab === "attendance" ? "active" : ""}`}
-                  onClick={() => handleTabChange("attendance")}
-                >
-                  <FaClock /> Attendance
                 </button>
               )}
             </div>
@@ -2733,7 +2737,7 @@ const EmployeeManagement = () => {
               />
             </div>
 
-            <div className="filter-buttons">
+            {/* <div className="filter-buttons">
               <button
                 className={`filter-btn ${activeFilter === "all" ? "active" : ""}`}
                 onClick={() => handleFilterChange("all")}
@@ -2752,17 +2756,17 @@ const EmployeeManagement = () => {
               >
                 Inactive
               </button>
-            </div>
+            </div> */}
 
             <div className="toolbar-actions">
-              <button
+              {/* <button
                 className="btn-refresh"
                 onClick={handleRefreshAll}
                 disabled={refreshing}
               >
                 <FaSyncAlt className={refreshing ? 'spinner' : ''} />
                 {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
+              </button> */}
 
               {(!menuId || hasPermission(menuId, 'add')) && (
                 <button className="btn-new" onClick={handleNewEmployee}>
@@ -2788,7 +2792,7 @@ const EmployeeManagement = () => {
                   <div className="header-cell">Basic Pay</div>
                   <div className="header-cell">Status</div>
                   {/* <div className="header-cell">Active</div> */}
-                  <div className="header-cell">Actions</div>
+                  {/* <div className="header-cell">Actions</div> */}
                 </div>
 
                 <div className="list-body">
@@ -2802,12 +2806,12 @@ const EmployeeManagement = () => {
                       const statusOptions = employeeStatusOptions[item.Code] || [];
 
                       return (
-                        <div key={item.Code} className="list-row">
+                        <div key={item.Code} className="list-row" onClick={() => handleEmployeeSelect(item)} >
                           <div className="row-cell">{item.Code}</div>
                           <div className="row-cell">{item.Name || `${item.FName || ''} ${item.LName || ''}`.trim()}</div>
                           <div className="row-cell">{deptName}</div>
                           <div className="row-cell">{desigName}</div>
-                          <div className="row-cell">{item.BasicPay}</div>
+                          <div className="row-cell">{formatMoney(item.BasicPay)}</div>
                           <div className="row-cell">
                             <span className={`status-badge ${statusInfo.name.toLowerCase()}`}>
                               {statusInfo.name}
@@ -2818,7 +2822,7 @@ const EmployeeManagement = () => {
                               {isActive ? "Active" : "Inactive"}
                             </span>
                           </div> */}
-                          <div className="row-cell actions">
+                          {/* <div className="row-cell actions">
                             <button className="action-btn view" onClick={() => handleEmployeeSelect(item)} title="View">
                               <FaEye />
                             </button>
@@ -2840,7 +2844,7 @@ const EmployeeManagement = () => {
                               </button>
                             )}
 
-                            {/* {(!menuId || hasPermission(menuId, 'post')) && (
+                             {(!menuId || hasPermission(menuId, 'post')) && (
                               <StatusDropdown
                                 statuses={statusOptions}
                                 selectedStatus={statusOptions.find(s => s.ccode == item.EmploymentStatus) ||
@@ -2848,8 +2852,8 @@ const EmployeeManagement = () => {
                                 onStatusChange={(status) => updateEmploymentStatus(item.Code, status)}
                                 disabled={isLoadingConfig || statusOptions.length === 0}
                               />
-                            )} */}
-                          </div>
+                            )} 
+                          </div> */}
                         </div>
                       );
                     })

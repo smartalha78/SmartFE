@@ -275,7 +275,6 @@ body {
 .header-cell {
   padding: 0 0.5rem;
   white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -637,9 +636,16 @@ body {
   font-weight: 500;
   border-left: 3px solid var(--primary-color);
 }
-
+.submenuemployee{
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 9999;
+  background: white;
+  width: 100%;
+}
 /* ===== BASIC INFO FORM ===== */
-.basic-info {
+.Employee-basic-info {
   animation: fadeIn 0.3s ease;
   overflow: visible !important;
 }
@@ -861,7 +867,7 @@ body {
 @media (max-width: 1400px) {
   .list-header,
   .list-row {
-    grid-template-columns: 70px 1.8fr 1.8fr 1.8fr 110px 90px 70px 180px;
+    grid-template-columns: 70px 1.8fr 1.8fr 1.8fr 110px 0px 0px 80px;
     font-size: 0.8125rem;
   }
 }

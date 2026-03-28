@@ -197,7 +197,7 @@ const AcademicTab = ({
       <div className="tab-header-actions">
         <h4><FaGraduationCap /> Academic Information</h4>
         <div className="header-right">
-          <input
+          {/* <input
             type="text"
             placeholder="Search..."
             value={filterText}
@@ -212,7 +212,7 @@ const AcademicTab = ({
           >
             <FaSyncAlt className={refreshing ? 'spinner' : ''} /> 
             {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </button> */}
           {isEditing && (
             <button className="btn new" onClick={onNew} disabled={saving}>
               <FaPlus /> Add New

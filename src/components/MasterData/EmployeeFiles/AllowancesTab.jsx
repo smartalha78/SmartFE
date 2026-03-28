@@ -244,7 +244,7 @@ const AllowancesTab = ({
       <div className="tab-header-actions">
         <h4><FaMoneyBill /> Allowances</h4>
         <div className="header-right">
-          <input
+          {/* <input
             type="text"
             placeholder="Search..."
             value={filterText}
@@ -259,7 +259,7 @@ const AllowancesTab = ({
           >
             <FaSyncAlt className={refreshing ? 'spinner' : ''} /> 
             {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </button> */}
           {isEditing && (
             <button className="btn new" onClick={onNew} disabled={saving}>
               <FaPlus /> Add New

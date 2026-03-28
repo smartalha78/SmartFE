@@ -257,7 +257,7 @@ const FamilyTab = ({
       <div className="tab-header-actions">
         <h4><FaUsers /> Family Details</h4>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
+          {/* <button 
             className="btn-refresh" 
             onClick={handleRefresh} 
             disabled={refreshing}
@@ -265,7 +265,7 @@ const FamilyTab = ({
           >
             <FaSyncAlt className={refreshing ? 'spinner' : ''} /> 
             {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </button> */}
           <button 
             className="btn-new" 
             onClick={onNew} 

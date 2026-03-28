@@ -203,14 +203,14 @@ const EmploymentTab = ({
       <div className="tab-header-actions">
         <h4><FaBriefcase /> Employment History</h4>
         <div className="header-right">
-          <input
+          {/* <input
             type="text"
             placeholder="Search..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             className="search-input small"
-          />
-          <button 
+          /> */}
+          {/* <button 
             className="btn refresh" 
             onClick={handleRefresh} 
             disabled={refreshing}
@@ -218,7 +218,7 @@ const EmploymentTab = ({
           >
             <FaSyncAlt className={refreshing ? 'spinner' : ''} /> 
             {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </button> */}
           {isEditing && (
             <button className="btn new" onClick={onNew} disabled={saving}>
               <FaPlus /> Add New
