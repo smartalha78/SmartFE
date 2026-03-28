@@ -40,6 +40,7 @@ import lndPlotCatagory from "./HRMSFiles/lndPlotCatagory";
 import lndRelation from "./HRMSFiles/lndRelation";
 import IMFThickness from "./HRMSFiles/IMFThickness";
 import UserRights from "./BusinessAdministration/UserRights";
+import Users from "./BusinessAdministration/Users";
 import IMFColor from "./HRMSFiles/IMFColor";
 // import IMFSize from "../components/HRMSFiles/IMFSize";
 import acGroup from "./HRMSFiles/acGroup";
@@ -50,10 +51,12 @@ import ChartofAccount from "./MasterData/ChartofAccount";
 import IMF from "./MasterData/IMF";
 import CustomerSupplierProfile from "./MasterData/CustomerSupplierProfile";
 import TransporterProfile from "./MasterData/TransporterProfile";
+import WarehouseCodes from "./MasterData/WarehouseCodes";
 import SalesManProfile from "./MasterData/SalesManProfile";
 import CityProfile from "./MasterData/CityProfile";
 import OrganizationalChart from "./MasterData/OrganizationalChart";
 import LabourProfile from "./MasterData/LabourProfile";
+import MonthlyVariableAllowance from "./Payroll/MonthlyVariableAllowance";
 // import Vechiles from "../components/Vechiles";
 import AttendanceMachines from "./MasterData/AttendanceMachines";
 // import BOMCreation from "./MRP/BOMCreation";
@@ -115,6 +118,7 @@ const menuIcons = {
   "lndRelation": <FaBook />,
   "IMFThickness": <FaBook />,
   "UserRights": <FaBook />,
+  "Users": <FaBook />,
   "IMFColor": <FaBook />,
   "acGroup": <FaBook />,
   "IMFSize": <FaBook />,
@@ -125,12 +129,14 @@ const menuIcons = {
   "IMF": <FaBook />,
   "CustomerSupplierProfile": <FaBook />,
   "TransporterProfile": <FaBook />,
+   "WarehouseCodes": <FaBook />,
   "SalesManProfile": <FaBook />,
   "CityProfile": <FaBook />,
   "OrganizationalChart": <FaBook />,
   "AttendanceMachines": <FaBook />,
   "BOMCreation": <FaBook />,
   "LabourProfile": <FaBook />,
+    "MonthlyVariableAllowance": <FaBook />,
   "Vechiles": <FaBook />,
   // "E-Invoice": <FaFileInvoiceDollar />
 };
@@ -380,15 +386,18 @@ function Dashboard() {
   const openIMFSizeTypeModal = createModalOpener("IMFSize");
   const openIMFThicknessTypeModal = createModalOpener("IMFThickness");
   const openUserRightsTypeModal = createModalOpener("UserRights");
+  const openUsersTypeModal = createModalOpener("Users");
   const openGoodsReceiptNoteTypeModal = createModalOpener("GoodsReceiptNote");
   const openChartofAccountTypeModal = createModalOpener("ChartofAccount");
   const openCustomerSupplierProfileTypeModal = createModalOpener("CustomerSupplierProfile");
   const openIMFTypeModal = createModalOpener("IMF");
   const openTransporterProfileTypeModal = createModalOpener("TransporterProfile");
+  const openWarehouseCodesTypeModal = createModalOpener("WarehouseCodes");
   const openSalesManProfileTypeModal = createModalOpener("SalesManProfile");
   const openCityProfileTypeModal = createModalOpener("CityProfile");
   const openOrganizationalChartTypeModal = createModalOpener("OrganizationalChart");
   const openLabourProfileTypeModal = createModalOpener("LabourProfile");
+  const openMonthlyVariableAllowanceTypeModal = createModalOpener("MonthlyVariableAllowance");
   const openVechilesTypeModal = createModalOpener("Vechiles");
   const openAttendanceMachinesTypeModal = createModalOpener("AttendanceMachines");
   const openBOMCreationTypeModal = createModalOpener("BOMCreation");
@@ -469,7 +478,8 @@ function Dashboard() {
       "Plot Categories": "lndPlotCatagory",
       "Relationship Types": "lndRelation",
       "ThickNess": "IMFThickness",
-      "ThickNess": "UserRights",
+      "User Rights": "UserRights",
+      "Users": "Users",
       "Color": "IMFColor",
       "Account Group .": "acGroup",
       "Land Frequency": "lndFrequency",
@@ -479,10 +489,12 @@ function Dashboard() {
       "Item Profile": "IMF",
       "Customer/Supplier Profile": "CustomerSupplierProfile",
       "Transporter Profile": "TransporterProfile",
+      "Warehouse Codes": "WarehouseCodes",
       "SalesMan Profile": "SalesManProfile",
       "City Profile": "CityProfile",
       "Organizational Chart": "OrganizationalChart",
       "Labour Profile": "LabourProfile",
+      "Monthly Variable Allowance": "MonthlyVariableAllowance",
       "Vechiles": "Vechiles",
       "Attendance Machines": "AttendanceMachines",
       "BOM Creation": "BOMCreation",
@@ -678,6 +690,10 @@ function Dashboard() {
       openUserRightsTypeModal();
       return;
     }
+    if (clickedItem.title === "Users") {
+      openUsersTypeModal();
+      return;
+    }
     if (clickedItem.title === "Color") {
       openIMFColorTypeModal();
       return;
@@ -714,6 +730,10 @@ function Dashboard() {
       openTransporterProfileTypeModal();
       return;
     }
+    if (clickedItem.title === "Warehouse Codes") {
+      openWarehouseCodesTypeModal();
+      return;
+    }
     if (clickedItem.title === "SalesMan Profile") {
       openSalesManProfileTypeModal();
       return;
@@ -728,6 +748,10 @@ function Dashboard() {
     }
     if (clickedItem.title === "Labour Profile") {
       openLabourProfileTypeModal();
+      return;
+    }
+     if (clickedItem.title === "Monthly Variable Allowance") {
+      openMonthlyVariableAllowanceTypeModal();
       return;
     }
     if (clickedItem.title === "Vechiles") {
@@ -1003,6 +1027,9 @@ function Dashboard() {
       case "UserRights":
         ModalComponent = UserRights;
         break;
+      case "Users":
+        ModalComponent = Users;
+        break;
       case "IMFColor":
         ModalComponent = IMFColor;
         break;
@@ -1030,6 +1057,9 @@ function Dashboard() {
       case "TransporterProfile":
         ModalComponent = TransporterProfile;
         break;
+      case "WarehouseCodes":
+        ModalComponent = WarehouseCodes;
+        break;
       case "SalesManProfile":
         ModalComponent = SalesManProfile;
         break;
@@ -1041,6 +1071,9 @@ function Dashboard() {
         break;
       case "LabourProfile":
         ModalComponent = LabourProfile;
+        break;
+      case "MonthlyVariableAllowance":
+        ModalComponent = MonthlyVariableAllowance;
         break;
       // case "Vechiles":
       //   ModalComponent = Vechiles;
@@ -1087,7 +1120,7 @@ function Dashboard() {
                   {isMaximized ? <Minimize2 /> : < Maximize2 />}
                 </a>
                 <a
-                  className="window-btn close-btn"
+                  className="window-btn "
                   onClick={closeModalHandler}
                   title="Close"
                 >
@@ -1176,6 +1209,7 @@ function Dashboard() {
       'lndRelation': 'Relationship Types',
       'IMFThickness': 'Thickness ',
       'UserRights': 'User Rights ',
+      'Users': 'Users ',
       'IMFColor': 'Color ',
       'acGroup': 'Account Group',
       'lndFrequency': 'Frequency ',
@@ -1185,11 +1219,13 @@ function Dashboard() {
       'ChartofAccount': 'Chart of Accounts',
       'IMF': 'Item Profile',
       'TransporterProfile': 'Transporter Profile',
+      'WarehouseCodes': 'Warehouse Codes',
       'SalesManProfile': 'Salesman Profile',
       'CityProfile': 'City Profile',
       'OrganizationalChart': 'Organizational Chart',
       'LabourProfile': 'Labour Profile',
-      'Vechiles': 'Vehicles ',
+      'LabourProfile': 'Labour Profile',
+      'MonthlyVariableAllowance': 'Monthly Variable Allowance ',
       'AttendanceMachines': 'Attendance Machines',
       'BOMCreation': 'BOM Creation',
       'CustomerSupplierProfile': 'Customer/Supplier Profile',

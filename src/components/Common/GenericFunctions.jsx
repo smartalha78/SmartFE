@@ -24,6 +24,8 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         countries: [],
         cities: []
     });
+    const [tableHasOffcode, setTableHasOffcode] = useState(false); // Track if table has offcode field
+    const [tableColumns, setTableColumns] = useState([]); // Store table columns
 
     // ✅ Helper to fetch JSON safely
     const fetchJson = async (url, options = {}) => {
@@ -60,6 +62,39 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         }
     };
 
+    // ✅ Get table structure to check for offcode column
+    const getTableStructure = async () => {
+        try {
+            const response = await fetchJson(`${API_BASE}/get-table-structure`, {
+                method: "POST",
+                body: JSON.stringify({
+                    tableName: moduleConfig.tableName
+                }),
+            });
+
+            if (response.success && response.columns) {
+                const columns = response.columns;
+                setTableColumns(columns);
+                
+                // Check if offcode exists in columns
+                const hasOffcode = columns.some(col => 
+                    col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
+                );
+                
+                setTableHasOffcode(hasOffcode);
+                console.log(`🔍 Table ${moduleConfig.tableName} ${hasOffcode ? 'has' : 'does not have'} offcode column`);
+                
+                return hasOffcode;
+            }
+            return false;
+        } catch (err) {
+            console.error("Failed to get table structure:", err);
+            // Default to assuming offcode exists if we can't check
+            setTableHasOffcode(true);
+            return true;
+        }
+    };
+
     // ✅ Fetch foreign data (countries, cities, etc.)
     const fetchForeignData = async () => {
         try {
@@ -67,13 +102,36 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
 
             // Fetch countries if needed
             if (moduleConfig.needsCountries) {
+                // First check if country table has offcode
+                let countryHasOffcode = false;
+                try {
+                    const countryStructure = await fetchJson(`${API_BASE}/get-table-structure`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                            tableName: "country"
+                        }),
+                    });
+
+                    countryHasOffcode = countryStructure.success && 
+                        countryStructure.columns.some(col => 
+                            col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
+                        );
+                } catch (err) {
+                    console.log("Could not check country table structure, assuming no offcode");
+                }
+
+                const countriesPayload = {
+                    tableName: "country",
+                    usePagination: false
+                };
+
+                if (countryHasOffcode) {
+                    countriesPayload.where = `offcode = '${currentOffcode}'`;
+                }
+
                 const countriesData = await fetchJson(`${API_BASE}/get-table-data`, {
                     method: "POST",
-                    body: JSON.stringify({
-                        tableName: "country",
-                        usePagination: false,
-                        where: `offcode = '${currentOffcode}'`
-                    }),
+                    body: JSON.stringify(countriesPayload),
                 });
 
                 if (countriesData.success && countriesData.rows) {
@@ -102,13 +160,36 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
 
             // Fetch cities if needed
             if (moduleConfig.needsCities) {
+                // First check if cities table has offcode
+                let citiesHasOffcode = false;
+                try {
+                    const citiesStructure = await fetchJson(`${API_BASE}/get-table-structure`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                            tableName: "cities"
+                        }),
+                    });
+
+                    citiesHasOffcode = citiesStructure.success && 
+                        citiesStructure.columns.some(col => 
+                            col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
+                        );
+                } catch (err) {
+                    console.log("Could not check cities table structure, assuming no offcode");
+                }
+
+                const citiesPayload = {
+                    tableName: "cities",
+                    usePagination: false
+                };
+
+                if (citiesHasOffcode) {
+                    citiesPayload.where = `offcode = '${currentOffcode}'`;
+                }
+
                 const citiesData = await fetchJson(`${API_BASE}/get-table-data`, {
                     method: "POST",
-                    body: JSON.stringify({
-                        tableName: "cities",
-                        usePagination: false,
-                        where: `offcode = '${currentOffcode}'`
-                    }),
+                    body: JSON.stringify(citiesPayload),
                 });
 
                 if (citiesData.success && citiesData.rows) {
@@ -153,6 +234,12 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Build WHERE clause for filters
     const buildWhereClause = () => {
         let conditions = [];
+        const currentOffcode = credentials?.company?.offcode || '0101';
+
+        // Add offcode condition if the table has offcode field
+        if (tableHasOffcode) {
+            conditions.push(`offcode = '${currentOffcode}'`);
+        }
 
         // Add search condition
         if (searchTerm && searchTerm.trim() !== "") {
@@ -204,12 +291,8 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                 payload.where = whereClause;
             }
 
-            // Only add company offcode if the table has offcode field (not fixed with empty value)
-            const hasFixedOffcode = moduleConfig.fields.fixed?.some(
-                f => f.name.toLowerCase() === "offcode" && f.value === " "
-            );
-            
-            if (!hasFixedOffcode) {
+            // Add company offcode to companyData if table has offcode
+            if (tableHasOffcode) {
                 payload.companyData = {
                     company: {
                         offcode: currentOffcode
@@ -229,7 +312,8 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                 rowsCount: data.rows?.length || 0,
                 totalCount: data.totalCount,
                 page: data.page,
-                totalPages: data.totalPages
+                totalPages: data.totalPages,
+                offcodeApplied: data.offcodeApplied
             });
 
             if (data.success && data.rows) {
@@ -265,17 +349,24 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             setLoading(false);
         }
     }, [moduleConfig.tableName, moduleConfig.fields, searchTerm, activeFilter, customFilter, 
-        credentials?.company?.offcode, itemsPerPage, API_BASE, isInitialLoad]);
+        credentials?.company?.offcode, itemsPerPage, API_BASE, isInitialLoad, tableHasOffcode]);
 
     // ✅ Initial data fetch
     useEffect(() => {
-        // Fetch supporting data
-        if (moduleConfig.needsCountries || moduleConfig.needsCities) {
-            fetchForeignData();
-        }
+        const initialize = async () => {
+            // Get table structure first
+            await getTableStructure();
+            
+            // Fetch supporting data
+            if (moduleConfig.needsCountries || moduleConfig.needsCities) {
+                await fetchForeignData();
+            }
 
-        // Initial data fetch
-        fetchItems(1, itemsPerPage);
+            // Initial data fetch
+            await fetchItems(1, itemsPerPage);
+        };
+
+        initialize();
     }, []);
 
     // ✅ Handle search with debounce
@@ -321,11 +412,17 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Helper to get next available code
     const fetchNextCodeFromServer = async () => {
         const codeField = moduleConfig.fields.basic?.[0] || "Code";
+        const currentOffcode = credentials?.company?.offcode || '0101';
 
         const payload = {
             tableName: moduleConfig.tableName,
             usePagination: false
         };
+
+        // Add offcode condition if the table has offcode field
+        if (tableHasOffcode) {
+            payload.where = `offcode = '${currentOffcode}'`;
+        }
 
         const data = await fetchJson(`${API_BASE}/get-table-data`, {
             method: "POST",
@@ -355,14 +452,61 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Handle new record
     const handleNew = async () => {
         const nextCode = await fetchNextCodeFromServer();
+        const currentOffcode = credentials?.company?.offcode || '0101';
 
         const newFormData = {
             [moduleConfig.fields.basic?.[0]]: nextCode
         };
 
+        // CRITICAL FIX: ALWAYS add offcode if the table has it
+        if (tableHasOffcode) {
+            newFormData.offcode = currentOffcode;
+            console.log(`✅ Adding offcode ${currentOffcode} to new record for table ${moduleConfig.tableName}`);
+        }
+
+        // Add fixed fields from config
+        if (moduleConfig.fields.fixed) {
+            moduleConfig.fields.fixed.forEach(field => {
+                // Don't override offcode if we already set it
+                if (field.name.toLowerCase() !== 'offcode' || !newFormData.offcode) {
+                    newFormData[field.name] = field.value;
+                }
+            });
+        }
+
+        // Initialize checkbox fields
         if (moduleConfig.fields.checkboxes) {
             moduleConfig.fields.checkboxes.forEach(field => {
-                newFormData[field] = field.toLowerCase().includes('active') ? true : false;
+                if (newFormData[field] === undefined) {
+                    newFormData[field] = field.toLowerCase().includes('active') ? true : false;
+                }
+            });
+        }
+
+        // Initialize text fields if needed
+        if (moduleConfig.fields.texts) {
+            moduleConfig.fields.texts.forEach(field => {
+                if (newFormData[field] === undefined) {
+                    newFormData[field] = "";
+                }
+            });
+        }
+
+        // Initialize number fields if needed
+        if (moduleConfig.fields.numbers) {
+            moduleConfig.fields.numbers.forEach(field => {
+                if (newFormData[field] === undefined) {
+                    newFormData[field] = "";
+                }
+            });
+        }
+
+        // Initialize dropdown fields if needed
+        if (moduleConfig.fields.dropdowns) {
+            moduleConfig.fields.dropdowns.forEach(field => {
+                if (newFormData[field.name] === undefined) {
+                    newFormData[field.name] = field.options[0]?.value || "";
+                }
             });
         }
 
@@ -431,17 +575,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
 
             // Build payload data - include ALL fields from formData
             Object.keys(formData).forEach(key => {
-                // Skip fields that are fixed with empty values
-                const isFixedEmpty = moduleConfig.fields.fixed?.some(
-                    f => f.name === key && f.value === " " && f.disabled
-                );
-
-                if (isFixedEmpty) {
-                    // For fixed fields with " " value, send empty string
-                    payloadData[key] = "";
-                    return;
-                }
-
                 // Handle number fields
                 if (moduleConfig.fields.numbers?.includes(key)) {
                     const numValue = parseInt(formData[key] || "0", 10);
@@ -457,10 +590,22 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                 }
             });
 
+            // CRITICAL FIX: ALWAYS add offcode if table has it
+            if (tableHasOffcode) {
+                const currentOffcode = credentials?.company?.offcode || '0101';
+                
+                // Check if offcode is already in payloadData
+                if (!payloadData.offcode || payloadData.offcode === "") {
+                    payloadData.offcode = currentOffcode;
+                    console.log(`✅ Adding offcode ${currentOffcode} to save payload for table ${moduleConfig.tableName}`);
+                }
+            }
+
             // Debug log
             console.log("📤 Save Request Details:", {
                 mode: popupMode,
                 table: moduleConfig.tableName,
+                tableHasOffcode,
                 primaryKeyField: primaryKeyField,
                 primaryKeyValue: formData[primaryKeyField],
                 payloadData: payloadData
@@ -534,6 +679,8 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         popupMode,
         selectedItem,
         foreignData,
+        tableHasOffcode,
+        tableColumns,
         // Functions
         fetchItems,
         handleSearchChange,

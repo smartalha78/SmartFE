@@ -1418,225 +1418,225 @@ const EmployeeManagement = () => {
     }
   };
 
-const saveTabRow = async (tabName, index, isNew = false) => {
-  if (!selectedEmployee?.Code) {
-    showToast("Please save the employee first before adding details", "error");
-    return;
-  }
+  const saveTabRow = async (tabName, index, isNew = false) => {
+    if (!selectedEmployee?.Code) {
+      showToast("Please save the employee first before adding details", "error");
+      return;
+    }
 
-  const tableMap = {
-    academic: "HRMSEmployeeAcademicInfo",
-    employment: "HRMSEmployementHistory",
-    allowances: "HRMSEmployeeGrantAllowance",
-    deductions: "HRMSEmployeeGrantDeduction",
-    family: "HRMSEmployeeFamilyDet",
-    attendance: "HRMSEmployee"
-  };
+    const tableMap = {
+      academic: "HRMSEmployeeAcademicInfo",
+      employment: "HRMSEmployementHistory",
+      allowances: "HRMSEmployeeGrantAllowance",
+      deductions: "HRMSEmployeeGrantDeduction",
+      family: "HRMSEmployeeFamilyDet",
+      attendance: "HRMSEmployee"
+    };
 
-  const tableName = tableMap[tabName];
-  if (!tableName) return;
+    const tableName = tableMap[tabName];
+    if (!tableName) return;
 
-  setSavingTab(tabName);
+    setSavingTab(tabName);
 
-  try {
-    let rowData = isNew ? { ...editState[tabName].newRows[index] } : { ...tabData[tabName].data[index] };
-    if (isNew) delete rowData.tempId;
+    try {
+      let rowData = isNew ? { ...editState[tabName].newRows[index] } : { ...tabData[tabName].data[index] };
+      if (isNew) delete rowData.tempId;
 
-    // Handle Family tab specifically
-    if (tabName === "family") {
-      // Log the data before processing
-      console.log("Raw family data before processing:", rowData);
+      // Handle Family tab specifically
+      if (tabName === "family") {
+        // Log the data before processing
+        console.log("Raw family data before processing:", rowData);
 
-      // Set the Code field
-      rowData.Code = selectedEmployee.Code;
+        // Set the Code field
+        rowData.Code = selectedEmployee.Code;
 
-      // Clean up the data - remove any system fields
-      delete rowData.offcode;
-      delete rowData.createdby;
-      delete rowData.createdate;
-      delete rowData.editby;
-      delete rowData.editdate;
-      delete rowData.uid;
-      delete rowData.rn;
-      delete rowData.RN;
+        // Clean up the data - remove any system fields
+        delete rowData.offcode;
+        delete rowData.createdby;
+        delete rowData.createdate;
+        delete rowData.editby;
+        delete rowData.editdate;
+        delete rowData.uid;
+        delete rowData.rn;
+        delete rowData.RN;
 
-      // IMPORTANT: Keep PK for updates, we'll handle it later
+        // IMPORTANT: Keep PK for updates, we'll handle it later
 
-      // Ensure Name is properly set (not undefined, not empty string)
-      if (!rowData.Name || rowData.Name.trim() === '') {
-        showToast("Name is required for family member", "error");
-        setSavingTab(null);
-        return;
-      }
-
-      // Trim the name
-      rowData.Name = rowData.Name.trim();
-
-      // Convert empty strings to null for other fields
-      Object.keys(rowData).forEach(key => {
-        if (key !== 'Name' && rowData[key] === "") {
-          rowData[key] = null;
+        // Ensure Name is properly set (not undefined, not empty string)
+        if (!rowData.Name || rowData.Name.trim() === '') {
+          showToast("Name is required for family member", "error");
+          setSavingTab(null);
+          return;
         }
-      });
 
-      // Format date for backend if present
-      if (rowData.DOB && rowData.DOB !== "") {
-        try {
-          const date = new Date(rowData.DOB);
-          if (!isNaN(date.getTime())) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            rowData.DOB = `${year}-${month}-${day} 00:00:00`;
+        // Trim the name
+        rowData.Name = rowData.Name.trim();
+
+        // Convert empty strings to null for other fields
+        Object.keys(rowData).forEach(key => {
+          if (key !== 'Name' && rowData[key] === "") {
+            rowData[key] = null;
           }
-        } catch (e) {
-          console.error("Error formatting DOB:", e);
+        });
+
+        // Format date for backend if present
+        if (rowData.DOB && rowData.DOB !== "") {
+          try {
+            const date = new Date(rowData.DOB);
+            if (!isNaN(date.getTime())) {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              rowData.DOB = `${year}-${month}-${day} 00:00:00`;
+            }
+          } catch (e) {
+            console.error("Error formatting DOB:", e);
+          }
+        }
+
+        // Clean CNIC - remove non-numeric characters
+        if (rowData.CNIC) {
+          rowData.CNIC = rowData.CNIC.replace(/\D/g, '');
+        }
+
+        // Log the processed data
+        console.log("Processed family data:", rowData);
+      }
+
+      // Handle Deductions tab specifically
+      if (tabName === "deductions") {
+        // Set the Code field
+        rowData.Code = selectedEmployee.Code;
+
+        // Clean up the data
+        delete rowData.Pk;
+        delete rowData.offcode;
+        delete rowData.createdby;
+        delete rowData.createdate;
+        delete rowData.editby;
+        delete rowData.editdate;
+        delete rowData.uid;
+        delete rowData.rn;
+        delete rowData.RN;
+
+        // Convert empty strings to null
+        Object.keys(rowData).forEach(key => {
+          if (rowData[key] === "") {
+            rowData[key] = null;
+          }
+        });
+
+        // Ensure numeric fields are proper numbers
+        if (rowData.Percentage !== undefined && rowData.Percentage !== null) {
+          rowData.Percentage = parseFloat(rowData.Percentage) || 0;
+        }
+        if (rowData.Amount !== undefined && rowData.Amount !== null) {
+          rowData.Amount = parseFloat(rowData.Amount) || 0;
+        }
+        if (rowData.CalType !== undefined && rowData.CalType !== null) {
+          rowData.CalType = parseInt(rowData.CalType) || 0;
         }
       }
 
-      // Clean CNIC - remove non-numeric characters
-      if (rowData.CNIC) {
-        rowData.CNIC = rowData.CNIC.replace(/\D/g, '');
+      // Handle other tabs (academic, employment, allowances, attendance)
+      if (tabName !== "family" && tabName !== "deductions") {
+        // Set the Code field
+        rowData.Code = selectedEmployee.Code;
+
+        // Clean up system fields
+        delete rowData.offcode;
+        delete rowData.createdby;
+        delete rowData.createdate;
+        delete rowData.editby;
+        delete rowData.editdate;
+        delete rowData.uid;
+        delete rowData.rn;
+        delete rowData.RN;
+
+        // Convert empty strings to null
+        Object.keys(rowData).forEach(key => {
+          if (rowData[key] === "") {
+            rowData[key] = null;
+          }
+        });
       }
 
-      // Log the processed data
-      console.log("Processed family data:", rowData);
-    }
-
-    // Handle Deductions tab specifically
-    if (tabName === "deductions") {
-      // Set the Code field
-      rowData.Code = selectedEmployee.Code;
-
-      // Clean up the data
-      delete rowData.Pk;
-      delete rowData.offcode;
-      delete rowData.createdby;
-      delete rowData.createdate;
-      delete rowData.editby;
-      delete rowData.editdate;
-      delete rowData.uid;
-      delete rowData.rn;
-      delete rowData.RN;
-
-      // Convert empty strings to null
-      Object.keys(rowData).forEach(key => {
-        if (rowData[key] === "") {
-          rowData[key] = null;
-        }
-      });
-
-      // Ensure numeric fields are proper numbers
-      if (rowData.Percentage !== undefined && rowData.Percentage !== null) {
-        rowData.Percentage = parseFloat(rowData.Percentage) || 0;
+      // For all tabs, ensure Code is set
+      if (!rowData.Code) {
+        rowData.Code = selectedEmployee.Code;
       }
-      if (rowData.Amount !== undefined && rowData.Amount !== null) {
-        rowData.Amount = parseFloat(rowData.Amount) || 0;
-      }
-      if (rowData.CalType !== undefined && rowData.CalType !== null) {
-        rowData.CalType = parseInt(rowData.CalType) || 0;
-      }
-    }
 
-    // Handle other tabs (academic, employment, allowances, attendance)
-    if (tabName !== "family" && tabName !== "deductions") {
-      // Set the Code field
-      rowData.Code = selectedEmployee.Code;
-      
-      // Clean up system fields
-      delete rowData.offcode;
-      delete rowData.createdby;
-      delete rowData.createdate;
-      delete rowData.editby;
-      delete rowData.editdate;
-      delete rowData.uid;
-      delete rowData.rn;
-      delete rowData.RN;
-      
-      // Convert empty strings to null
-      Object.keys(rowData).forEach(key => {
-        if (rowData[key] === "") {
-          rowData[key] = null;
-        }
-      });
-    }
+      // Remove only system fields that might cause issues (keep Name!)
+      ['rn', 'RN', 'FullName', 'DisplayName', 'createdby', 'createdate', 'editby', 'editdate', 'uid'].forEach(f => delete rowData[f]);
 
-    // For all tabs, ensure Code is set
-    if (!rowData.Code) {
-      rowData.Code = selectedEmployee.Code;
-    }
+      // Determine if this is an UPDATE or INSERT
+      let apiEndpoint = `${API_BASE}/table/insert`;
+      let apiPayload = { tableName, data: rowData };
 
-    // Remove only system fields that might cause issues (keep Name!)
-    ['rn', 'RN', 'FullName', 'DisplayName', 'createdby', 'createdate', 'editby', 'editdate', 'uid'].forEach(f => delete rowData[f]);
+      // Check if this is an update (has PK field and not a new row)
+      const possiblePkFields = ['PK', 'Pk', 'pk', 'FamilyID', 'FamilyId', 'familyid', 'EHID', 'AcademicID', 'EmploymentID', 'AllowanceID', 'DeductionID', 'ID', 'Id', 'id'];
+      const hasPk = possiblePkFields.some(field => rowData[field] !== undefined && rowData[field] !== null && rowData[field] !== '');
 
-    // Determine if this is an UPDATE or INSERT
-    let apiEndpoint = `${API_BASE}/table/insert`;
-    let apiPayload = { tableName, data: rowData };
+      if (!isNew && hasPk) {
+        // This is an update
+        apiEndpoint = `${API_BASE}/table/update`;
 
-    // Check if this is an update (has PK field and not a new row)
-    const possiblePkFields = ['PK', 'Pk', 'pk', 'FamilyID', 'FamilyId', 'familyid', 'EHID', 'AcademicID', 'EmploymentID', 'AllowanceID', 'DeductionID', 'ID', 'Id', 'id'];
-    const hasPk = possiblePkFields.some(field => rowData[field] !== undefined && rowData[field] !== null && rowData[field] !== '');
+        // Find the primary key field
+        const pkField = Object.keys(rowData).find(k =>
+          possiblePkFields.includes(k)
+        ) || 'PK';
 
-    if (!isNew && hasPk) {
-      // This is an update
-      apiEndpoint = `${API_BASE}/table/update`;
-      
-      // Find the primary key field
-      const pkField = Object.keys(rowData).find(k => 
-        possiblePkFields.includes(k)
-      ) || 'PK';
-      
-      const pkValue = rowData[pkField];
-      
-      // Create a copy of rowData without PK for the update data
-      const updateData = { ...rowData };
-      delete updateData[pkField];
-      
-      apiPayload = {
-        tableName,
-        data: updateData,
-        where: { [pkField]: pkValue }
-      };
-      
-      console.log(`Updating ${tabName} record with ${pkField}=${pkValue}`, updateData);
-    } else {
-      // This is an insert - remove any PK fields if they exist
-      possiblePkFields.forEach(field => {
-        delete rowData[field];
-      });
-      console.log(`Inserting new ${tabName} record`, rowData);
-    }
+        const pkValue = rowData[pkField];
 
-    const res = await fetchJson(apiEndpoint, {
-      method: "POST",
-      body: JSON.stringify(apiPayload)
-    });
+        // Create a copy of rowData without PK for the update data
+        const updateData = { ...rowData };
+        delete updateData[pkField];
 
-    if (res?.success) {
-      await loadTabData(tabName, true);
-      if (isNew) {
-        setEditState(prev => ({
-          ...prev,
-          [tabName]: { ...prev[tabName], newRows: prev[tabName].newRows.filter((_, i) => i !== index) }
-        }));
-        showToast(`${tabName === 'family' ? 'Family member' : tabName} record added successfully`, "success");
+        apiPayload = {
+          tableName,
+          data: updateData,
+          where: { [pkField]: pkValue }
+        };
+
+        console.log(`Updating ${tabName} record with ${pkField}=${pkValue}`, updateData);
       } else {
-        setEditState(prev => ({
-          ...prev,
-          [tabName]: { ...prev[tabName], editing: { ...prev[tabName].editing, [index]: false } }
-        }));
-        showToast(`${tabName === 'family' ? 'Family member' : tabName} record updated successfully`, "success");
+        // This is an insert - remove any PK fields if they exist
+        possiblePkFields.forEach(field => {
+          delete rowData[field];
+        });
+        console.log(`Inserting new ${tabName} record`, rowData);
       }
-    } else {
-      showToast("Save failed: " + (res.error || "Unknown error"), "error");
+
+      const res = await fetchJson(apiEndpoint, {
+        method: "POST",
+        body: JSON.stringify(apiPayload)
+      });
+
+      if (res?.success) {
+        await loadTabData(tabName, true);
+        if (isNew) {
+          setEditState(prev => ({
+            ...prev,
+            [tabName]: { ...prev[tabName], newRows: prev[tabName].newRows.filter((_, i) => i !== index) }
+          }));
+          showToast(`${tabName === 'family' ? 'Family member' : tabName} record added successfully`, "success");
+        } else {
+          setEditState(prev => ({
+            ...prev,
+            [tabName]: { ...prev[tabName], editing: { ...prev[tabName].editing, [index]: false } }
+          }));
+          showToast(`${tabName === 'family' ? 'Family member' : tabName} record updated successfully`, "success");
+        }
+      } else {
+        showToast("Save failed: " + (res.error || "Unknown error"), "error");
+      }
+    } catch (err) {
+      console.error("Save error:", err);
+      showToast(`Failed to save: ${err.message}`, "error");
+    } finally {
+      setSavingTab(null);
     }
-  } catch (err) {
-    console.error("Save error:", err);
-    showToast(`Failed to save: ${err.message}`, "error");
-  } finally {
-    setSavingTab(null);
-  }
-};
+  };
 
   const deleteTabRow = async (tabName, index) => {
     if (!selectedEmployee?.Code) return;
@@ -2813,11 +2813,11 @@ const saveTabRow = async (tabName, index, isNew = false) => {
                               {statusInfo.name}
                             </span>
                           </div>
-                          <div className="row-cell">
+                          {/* <div className="row-cell">
                             <span className={`status-badge ${isActive ? "active" : "inactive"}`}>
                               {isActive ? "Active" : "Inactive"}
                             </span>
-                          </div>
+                          </div> */}
                           <div className="row-cell actions">
                             <button className="action-btn view" onClick={() => handleEmployeeSelect(item)} title="View">
                               <FaEye />
@@ -2840,7 +2840,7 @@ const saveTabRow = async (tabName, index, isNew = false) => {
                               </button>
                             )}
 
-                            {(!menuId || hasPermission(menuId, 'post')) && (
+                            {/* {(!menuId || hasPermission(menuId, 'post')) && (
                               <StatusDropdown
                                 statuses={statusOptions}
                                 selectedStatus={statusOptions.find(s => s.ccode == item.EmploymentStatus) ||
@@ -2848,7 +2848,7 @@ const saveTabRow = async (tabName, index, isNew = false) => {
                                 onStatusChange={(status) => updateEmploymentStatus(item.Code, status)}
                                 disabled={isLoadingConfig || statusOptions.length === 0}
                               />
-                            )}
+                            )} */}
                           </div>
                         </div>
                       );

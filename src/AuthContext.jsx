@@ -17,6 +17,11 @@ export const AuthProvider = ({ children }) => {
       
       setCredentials(enhancedCreds);
       localStorage.setItem("authCredentials", JSON.stringify(enhancedCreds));
+      
+      // Also store uid separately if needed
+      if (creds.uid) {
+        localStorage.setItem("userUid", creds.uid);
+      }
     } catch (error) {
       console.error("Failed to save credentials:", error);
       throw new Error("Failed to save login credentials");
@@ -26,6 +31,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setCredentials(null);
     localStorage.removeItem("authCredentials");
+    localStorage.removeItem("userUid");
   };
 
   useEffect(() => {
@@ -51,12 +57,18 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
+  // Helper to get current user ID
+  const getCurrentUserId = () => {
+    return credentials?.uid || localStorage.getItem("userUid") || "";
+  };
+
   return (
     <AuthContext.Provider value={{ 
       credentials, 
       login, 
       logout, 
-      isLoading 
+      isLoading,
+      getCurrentUserId  // Add this helper
     }}>
       {children}
     </AuthContext.Provider>
