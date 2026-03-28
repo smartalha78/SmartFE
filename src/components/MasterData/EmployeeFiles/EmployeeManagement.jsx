@@ -1,4 +1,4 @@
-// EmployeeManagement.jsx - Complete Working Version with Debugging
+// EmployeeManagement.jsx - Complete Working Version with All Fixes
 import React, { useState, useEffect, useCallback, useContext, lazy, Suspense } from "react";
 import {
   FaEdit, FaPlus, FaTimes, FaSave, FaSearch, FaEye, FaGraduationCap,
@@ -21,6 +21,7 @@ import Toast from "./Toast";
 import DocumentStatusBar from "./DocumentStatusBar";
 import StatusDropdown from "./StatusDropdown";
 import API_BASE1 from "../../../config"
+
 // Lazy load tab components
 const AcademicTab = lazy(() => import("./AcademicTab"));
 const EmploymentTab = lazy(() => import("./EmploymentTab"));
@@ -53,29 +54,14 @@ const EmployeeManagement = () => {
     isUpload: false
   });
 
-  // Get the menu ID from screenConfig
   const menuId = screenConfig?.id;
 
-  // Debug logging
-  // In EmployeeManagement.jsx, update the useEffect for debugging
-  useEffect(() => {
-    console.log('=== EmployeeManagement Debug Info ===');
-    console.log('Credentials:', credentials);
-    console.log('User ID from credentials:', credentials?.Uid);
-    console.log('Screen Config:', screenConfig);
-    console.log('Menu ID:', menuId);
-    console.log('User Rights:', userRights);
-    console.log('Rights for this menu:', menuId ? userRights[menuId] : null);
-    console.log('Has Edit Permission:', menuId ? hasPermission(menuId, 'edit') : false);
-    console.log('Has Add Permission:', menuId ? hasPermission(menuId, 'add') : false);
-    console.log('Has Print Permission:', menuId ? hasPermission(menuId, 'print') : false);
-    console.log('Has Post Permission:', menuId ? hasPermission(menuId, 'post') : false);
-    console.log('Has View Permission:', menuId ? hasPermission(menuId, 'view') : false);
-    console.log('=====================================');
-  }, [credentials, screenConfig, menuId, userRights, hasPermission]);
-
-  // Add this to handle loading state
-
+  // Status change modal state
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const [pendingEmployeeCode, setPendingEmployeeCode] = useState(null);
+  const [joiningDate, setJoiningDate] = useState("");
+  const [leftDate, setLeftDate] = useState("");
 
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -187,52 +173,37 @@ const EmployeeManagement = () => {
   // ---- API Base ----
   const API_BASE = API_BASE1;
 
-  // Header sections definition
+  // Header sections definition - Personal Info now shows all without submenus
   const headerSections = [
     {
       key: 'personal',
       title: "Personal Information",
       icon: <FaUserCircle />,
-      submenus: [
-        { key: 'basic', label: 'Basic Info', sectionKey: 'personal' },
-        { key: 'details', label: 'Personal Details', sectionKey: 'details' },
-        { key: 'contact', label: 'Contact', sectionKey: 'contact' }
-      ]
+      submenus: [] // Empty array - no submenus, show all info
     },
     {
       key: 'address',
       title: "Address Information",
       icon: <FaHome />,
-      submenus: [
-        { key: 'permanent', label: 'Permanent Address', sectionKey: 'permanent' },
-        { key: 'home', label: 'Home Address', sectionKey: 'home' }
-      ]
+      submenus: [] // Empty array - no submenus, show all info
     },
     {
       key: 'employment',
       title: "Employment",
       icon: <FaBriefcaseIcon />,
-      submenus: [
-        { key: 'employment-details', label: 'Employment Details', sectionKey: 'employment-details' },
-        { key: 'dates', label: 'Employment Dates', sectionKey: 'dates' },
-        { key: 'salary', label: 'Contract & Salary', sectionKey: 'salary' }
-      ]
+      submenus: [] // Empty array - no submenus, show all info
     },
     {
       key: 'bank',
       title: "Bank Details",
       icon: <FaUniversityIcon />,
-      submenus: [
-        { key: 'bank-details', label: 'Bank Info', sectionKey: 'bank-details' }
-      ]
+      submenus: [] // Empty array - no submenus, show all info
     },
     {
       key: 'system',
       title: "System Fields",
       icon: <FaCog />,
-      submenus: [
-        { key: 'system-fields', label: 'System Settings', sectionKey: 'system-fields' }
-      ]
+      submenus: [] // Empty array - no submenus, show all info
     }
   ];
 
@@ -252,24 +223,7 @@ const EmployeeManagement = () => {
     } else {
       setOpenHeader(headerKey);
       setActiveHeader(headerKey);
-      const header = headerSections.find(h => h.key === headerKey);
-      if (header && header.submenus.length > 0) {
-        setActiveSubmenu(header.submenus[0].key);
-      }
     }
-  };
-
-  // Submenu click handler
-  const handleSubmenuClick = (submenuKey, sectionKey) => {
-    setActiveSubmenu(submenuKey);
-    setOpenHeader(null);
-
-    setTimeout(() => {
-      const element = document.getElementById(`section-${sectionKey}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
   };
 
   // Close submenu when clicking outside
@@ -356,8 +310,6 @@ const EmployeeManagement = () => {
         statuses.sort((a, b) => (a.nFilterSort || 999) - (b.nFilterSort || 999));
 
         setAllDocumentStatuses(statuses);
-
-        // Set default selected status to null to show all employees
         setSelectedStatus(null);
 
         const counts = {};
@@ -424,33 +376,57 @@ const EmployeeManagement = () => {
     }
   };
 
-  // ---- Update employment status with auto-fill dates ----
-  const updateEmploymentStatus = async (code, newStatus) => {
+  // New function to handle status change with confirmation
+  const handleStatusChangeWithConfirmation = (employeeCode, newStatus) => {
+    const currentEmployee = employees.find(e => e.Code === employeeCode) || selectedEmployee;
+    const today = getTodayDate();
+
+    if (newStatus.ccode === 1) {
+      const currentJoiningDate = currentEmployee?.JoiningDate;
+      const defaultDate = (!currentJoiningDate ||
+        currentJoiningDate === "" ||
+        currentJoiningDate === "1900-01-01" ||
+        currentJoiningDate === "1900-01-01 00:00:00")
+        ? today
+        : formatDateForInput(currentJoiningDate);
+      setJoiningDate(defaultDate);
+      setLeftDate("");
+    } else if (newStatus.ccode === 2 || newStatus.ccode === 3) {
+      const currentLeftDate = currentEmployee?.LeftDate;
+      const defaultDate = (!currentLeftDate ||
+        currentLeftDate === "" ||
+        currentLeftDate === "1900-01-01" ||
+        currentLeftDate === "1900-01-01 00:00:00")
+        ? today
+        : formatDateForInput(currentLeftDate);
+      setLeftDate(defaultDate);
+      setJoiningDate("");
+    } else {
+      setJoiningDate("");
+      setLeftDate("");
+    }
+
+    setPendingStatusChange(newStatus);
+    setPendingEmployeeCode(employeeCode);
+    setShowStatusModal(true);
+  };
+
+  // New function to confirm and apply status change
+  const confirmStatusChange = async () => {
+    if (!pendingEmployeeCode || !pendingStatusChange) return;
+
     try {
-      const today = getTodayDate();
-      const updates = { EmploymentStatus: newStatus.ccode };
+      const updates = { EmploymentStatus: pendingStatusChange.ccode };
 
-      const currentEmployee = employees.find(e => e.Code === code) || selectedEmployee;
-
-      if (newStatus.ccode === 1) {
-        if (!currentEmployee?.JoiningDate ||
-          currentEmployee.JoiningDate === "" ||
-          currentEmployee.JoiningDate === "1900-01-01" ||
-          currentEmployee.JoiningDate === "1900-01-01 00:00:00") {
-          updates.JoiningDate = today;
-        }
-      } else if (newStatus.ccode === 2 || newStatus.ccode === 3) {
-        if (!currentEmployee?.LeftDate ||
-          currentEmployee.LeftDate === "" ||
-          currentEmployee.LeftDate === "1900-01-01" ||
-          currentEmployee.LeftDate === "1900-01-01 00:00:00") {
-          updates.LeftDate = today;
-        }
+      if (pendingStatusChange.ccode === 1 && joiningDate) {
+        updates.JoiningDate = joiningDate;
+      } else if ((pendingStatusChange.ccode === 2 || pendingStatusChange.ccode === 3) && leftDate) {
+        updates.LeftDate = leftDate;
       }
 
       const payload = {
         tableName: "HRMSEmployee",
-        where: { Code: code },
+        where: { Code: pendingEmployeeCode },
         data: updates
       };
 
@@ -463,28 +439,32 @@ const EmployeeManagement = () => {
       const data = await res.json();
 
       if (data.success) {
-        showToast(`Status updated to ${newStatus.cname} successfully`, "success");
+        showToast(`Status updated to ${pendingStatusChange.cname} successfully`, "success");
         await loadEmployees(currentPage);
 
-        if (selectedEmployee && selectedEmployee.Code === code) {
+        if (selectedEmployee && selectedEmployee.Code === pendingEmployeeCode) {
           const updatedEmp = {
             ...selectedEmployee,
             ...updates,
-            EmploymentStatus: newStatus.ccode
+            EmploymentStatus: pendingStatusChange.ccode
           };
           setSelectedEmployee(updatedEmp);
           setFormData(updatedEmp);
         }
 
-        await loadEmployeeStatusOptions(code, newStatus.ccode);
-        return true;
+        await loadEmployeeStatusOptions(pendingEmployeeCode, pendingStatusChange.ccode);
+      } else {
+        showToast(`Failed to update status: ${data.error || "Unknown error"}`, "error");
       }
-      showToast(`Failed to update status: ${data.error || "Unknown error"}`, "error");
-      return false;
     } catch (err) {
       console.error("Error updating employment status:", err);
       showToast(`Error: ${err.message}`, "error");
-      return false;
+    } finally {
+      setShowStatusModal(false);
+      setPendingStatusChange(null);
+      setPendingEmployeeCode(null);
+      setJoiningDate("");
+      setLeftDate("");
     }
   };
 
@@ -781,8 +761,6 @@ const EmployeeManagement = () => {
   const loadReferenceData = async () => {
     try {
       setLoading(true);
-
-      // Get the offcode from credentials
       const offcode = credentials?.offcode || "1010";
 
       const [
@@ -979,7 +957,6 @@ const EmployeeManagement = () => {
 
       let whereClause = "";
 
-      // Only add where clause if not "All" and status is selected
       if (selectedStatus && selectedStatus.ccode !== 'all' && selectedStatus.ccode !== -1) {
         whereClause = `EmploymentStatus = ${selectedStatus.ccode}`;
       } else if (activeFilter !== "all") {
@@ -1062,6 +1039,7 @@ const EmployeeManagement = () => {
   };
 
   // ---- Load Tab Data ----
+  // ---- Load Tab Data ----
   const loadTabData = async (tabName, forceRefresh = false) => {
     if (!selectedEmployee?.Code) return;
 
@@ -1071,7 +1049,7 @@ const EmployeeManagement = () => {
       allowances: "HRMSEmployeeGrantAllowance",
       deductions: "HRMSEmployeeGrantDeduction",
       family: "HRMSEmployeeFamilyDet",
-      attendance: "HRMSEmployee"
+      attendance: "HRMSEmployee" // Keep as HRMSEmployee for attendance settings
     };
 
     const tableName = tableMap[tabName];
@@ -1091,24 +1069,46 @@ const EmployeeManagement = () => {
     }));
 
     try {
-      const where = `Code = '${selectedEmployee.Code}'`;
-      const res = await fetchJson(`${API_BASE}/get-table-data`, {
-        method: "POST",
-        body: JSON.stringify({ tableName, where, usePagination: false })
-      });
+      let rows = [];
 
-      if (res?.success) {
-        setTabData(prev => ({
-          ...prev,
-          [tabName]: {
-            data: res.rows || [],
-            loaded: true,
-            loading: false,
-            error: null,
-            lastRefreshed: new Date().toISOString()
-          }
-        }));
+      if (tabName === "attendance") {
+        // For attendance tab, we just load the employee's attendance settings
+        const where = `Code = '${selectedEmployee.Code}'`;
+        const res = await fetchJson(`${API_BASE}/get-table-data`, {
+          method: "POST",
+          body: JSON.stringify({ tableName, where, usePagination: false })
+        });
+
+        if (res?.success && res.rows && res.rows.length > 0) {
+          // Store the employee data for attendance settings
+          rows = [res.rows[0]];
+        } else {
+          // If no data found, create a default object with the employee code
+          rows = [{ Code: selectedEmployee.Code }];
+        }
+      } else {
+        // For other tabs, load their specific data
+        const where = `Code = '${selectedEmployee.Code}'`;
+        const res = await fetchJson(`${API_BASE}/get-table-data`, {
+          method: "POST",
+          body: JSON.stringify({ tableName, where, usePagination: false })
+        });
+
+        if (res?.success) {
+          rows = res.rows || [];
+        }
       }
+
+      setTabData(prev => ({
+        ...prev,
+        [tabName]: {
+          data: rows,
+          loaded: true,
+          loading: false,
+          error: null,
+          lastRefreshed: new Date().toISOString()
+        }
+      }));
     } catch (err) {
       console.error(`Error loading ${tabName} data:`, err);
       setTabData(prev => ({
@@ -1128,12 +1128,9 @@ const EmployeeManagement = () => {
   const handleStatusChange = (status) => {
     setSelectedStatus(status);
     setCurrentPage(1);
-
-    // If "All" is selected, clear the activeFilter to show all employees
     if (status.ccode === 'all' || status.ccode === -1) {
       setActiveFilter('all');
     }
-
     loadEmployees(1);
   };
 
@@ -1442,44 +1439,82 @@ const EmployeeManagement = () => {
       let rowData = isNew ? { ...editState[tabName].newRows[index] } : { ...tabData[tabName].data[index] };
       if (isNew) delete rowData.tempId;
 
-      // Handle Family tab specifically
+      // Special handling for attendance tab (updating employee settings)
+      if (tabName === "attendance") {
+        // These are the fields that belong to attendance settings in HRMSEmployee table
+        const attendanceSettingsFields = [
+          'offdayBonusAllow',
+          'AutoAttendanceAllow',
+          'OverTimeAllow',
+          'LateTimeAllow',
+          'EarlyLateAllow',
+          'HolyDayBonusAllow',
+          'PunctuailityAllown',
+          'EmployeeCommisionBonusActive',
+          'EmployeeEarlyLateDeductionOnTimeActive',
+          'EarlyLateNoofDeductionExempt',
+          'NoOfDependant',
+          'EmployeeCommisionBonusPer',
+          'OTAllowedPerDay'
+        ];
+
+        // Filter only attendance setting fields
+        const filteredData = {};
+        attendanceSettingsFields.forEach(field => {
+          if (rowData[field] !== undefined) {
+            // Convert checkbox values to "True"/"False" strings for database
+            if (typeof rowData[field] === 'boolean') {
+              filteredData[field] = rowData[field] ? "True" : "False";
+            } else if (typeof rowData[field] === 'string' &&
+              (rowData[field].toLowerCase() === 'true' || rowData[field].toLowerCase() === 'false')) {
+              filteredData[field] = rowData[field].charAt(0).toUpperCase() + rowData[field].slice(1).toLowerCase();
+            } else {
+              filteredData[field] = rowData[field];
+            }
+          }
+        });
+
+        // Add edit information
+        filteredData.editby = credentials?.username || "admin";
+        filteredData.editdate = new Date().toISOString().split('T')[0] + ' 00:00:00';
+
+        // Update the employee record
+        const where = { Code: selectedEmployee.Code };
+
+        const res = await fetchJson(`${API_BASE}/table/update`, {
+          method: "POST",
+          body: JSON.stringify({
+            tableName,
+            data: filteredData,
+            where
+          })
+        });
+
+        if (res?.success) {
+          await loadTabData(tabName, true);
+          setEditState(prev => ({
+            ...prev,
+            [tabName]: { ...prev[tabName], editing: { ...prev[tabName].editing, [index]: false } }
+          }));
+          showToast("Attendance settings updated successfully", "success");
+        } else {
+          showToast("Save failed: " + (res.error || "Unknown error"), "error");
+        }
+
+        setSavingTab(null);
+        return;
+      }
+
+      // For family tab
       if (tabName === "family") {
-        // Log the data before processing
-        console.log("Raw family data before processing:", rowData);
-
-        // Set the Code field
-        rowData.Code = selectedEmployee.Code;
-
-        // Clean up the data - remove any system fields
-        delete rowData.offcode;
-        delete rowData.createdby;
-        delete rowData.createdate;
-        delete rowData.editby;
-        delete rowData.editdate;
-        delete rowData.uid;
-        delete rowData.rn;
-        delete rowData.RN;
-
-        // IMPORTANT: Keep PK for updates, we'll handle it later
-
-        // Ensure Name is properly set (not undefined, not empty string)
         if (!rowData.Name || rowData.Name.trim() === '') {
           showToast("Name is required for family member", "error");
           setSavingTab(null);
           return;
         }
-
-        // Trim the name
         rowData.Name = rowData.Name.trim();
+        rowData.Code = selectedEmployee.Code;
 
-        // Convert empty strings to null for other fields
-        Object.keys(rowData).forEach(key => {
-          if (key !== 'Name' && rowData[key] === "") {
-            rowData[key] = null;
-          }
-        });
-
-        // Format date for backend if present
         if (rowData.DOB && rowData.DOB !== "") {
           try {
             const date = new Date(rowData.DOB);
@@ -1494,64 +1529,18 @@ const EmployeeManagement = () => {
           }
         }
 
-        // Clean CNIC - remove non-numeric characters
         if (rowData.CNIC) {
           rowData.CNIC = rowData.CNIC.replace(/\D/g, '');
         }
-
-        // Log the processed data
-        console.log("Processed family data:", rowData);
       }
 
-      // Handle Deductions tab specifically
-      if (tabName === "deductions") {
-        // Set the Code field
-        rowData.Code = selectedEmployee.Code;
-
-        // Clean up the data
-        delete rowData.Pk;
-        delete rowData.offcode;
-        delete rowData.createdby;
-        delete rowData.createdate;
-        delete rowData.editby;
-        delete rowData.editdate;
-        delete rowData.uid;
-        delete rowData.rn;
-        delete rowData.RN;
-
-        // Convert empty strings to null
-        Object.keys(rowData).forEach(key => {
-          if (rowData[key] === "") {
-            rowData[key] = null;
-          }
-        });
-
-        // Ensure numeric fields are proper numbers
-        if (rowData.Percentage !== undefined && rowData.Percentage !== null) {
-          rowData.Percentage = parseFloat(rowData.Percentage) || 0;
-        }
-        if (rowData.Amount !== undefined && rowData.Amount !== null) {
-          rowData.Amount = parseFloat(rowData.Amount) || 0;
-        }
-        if (rowData.CalType !== undefined && rowData.CalType !== null) {
-          rowData.CalType = parseInt(rowData.CalType) || 0;
-        }
-      }
-
-      // Handle other tabs (academic, employment, allowances, attendance)
-      if (tabName !== "family" && tabName !== "deductions") {
-        // Set the Code field
+      // For other tabs (academic, employment, allowances, deductions)
+      if (tabName !== "attendance" && tabName !== "family") {
         rowData.Code = selectedEmployee.Code;
 
         // Clean up system fields
-        delete rowData.offcode;
-        delete rowData.createdby;
-        delete rowData.createdate;
-        delete rowData.editby;
-        delete rowData.editdate;
-        delete rowData.uid;
-        delete rowData.rn;
-        delete rowData.RN;
+        const systemFields = ['offcode', 'createdby', 'createdate', 'editby', 'editdate', 'uid', 'rn', 'RN', 'FullName', 'DisplayName'];
+        systemFields.forEach(field => delete rowData[field]);
 
         // Convert empty strings to null
         Object.keys(rowData).forEach(key => {
@@ -1561,50 +1550,22 @@ const EmployeeManagement = () => {
         });
       }
 
-      // For all tabs, ensure Code is set
-      if (!rowData.Code) {
-        rowData.Code = selectedEmployee.Code;
-      }
-
-      // Remove only system fields that might cause issues (keep Name!)
-      ['rn', 'RN', 'FullName', 'DisplayName', 'createdby', 'createdate', 'editby', 'editdate', 'uid'].forEach(f => delete rowData[f]);
-
-      // Determine if this is an UPDATE or INSERT
+      // Determine if this is an UPDATE or INSERT for non-attendance tabs
       let apiEndpoint = `${API_BASE}/table/insert`;
       let apiPayload = { tableName, data: rowData };
 
-      // Check if this is an update (has PK field and not a new row)
-      const possiblePkFields = ['PK', 'Pk', 'pk', 'FamilyID', 'FamilyId', 'familyid', 'EHID', 'AcademicID', 'EmploymentID', 'AllowanceID', 'DeductionID', 'ID', 'Id', 'id'];
+      const possiblePkFields = ['PK', 'Pk', 'pk', 'FamilyID', 'FamilyId', 'familyid', 'EHID', 'AcademicID', 'EmploymentID', 'AllowanceID', 'DeductionID'];
       const hasPk = possiblePkFields.some(field => rowData[field] !== undefined && rowData[field] !== null && rowData[field] !== '');
 
       if (!isNew && hasPk) {
-        // This is an update
         apiEndpoint = `${API_BASE}/table/update`;
-
-        // Find the primary key field
-        const pkField = Object.keys(rowData).find(k =>
-          possiblePkFields.includes(k)
-        ) || 'PK';
-
+        const pkField = Object.keys(rowData).find(k => possiblePkFields.includes(k)) || 'PK';
         const pkValue = rowData[pkField];
-
-        // Create a copy of rowData without PK for the update data
         const updateData = { ...rowData };
         delete updateData[pkField];
-
-        apiPayload = {
-          tableName,
-          data: updateData,
-          where: { [pkField]: pkValue }
-        };
-
-        console.log(`Updating ${tabName} record with ${pkField}=${pkValue}`, updateData);
+        apiPayload = { tableName, data: updateData, where: { [pkField]: pkValue } };
       } else {
-        // This is an insert - remove any PK fields if they exist
-        possiblePkFields.forEach(field => {
-          delete rowData[field];
-        });
-        console.log(`Inserting new ${tabName} record`, rowData);
+        possiblePkFields.forEach(field => delete rowData[field]);
       }
 
       const res = await fetchJson(apiEndpoint, {
@@ -1647,7 +1608,8 @@ const EmployeeManagement = () => {
       employment: "HRMSEmployementHistory",
       allowances: "HRMSEmployeeGrantAllowance",
       deductions: "HRMSEmployeeGrantDeduction",
-      family: "HRMSEmployeeFamilyDet"
+      family: "HRMSEmployeeFamilyDet",
+      attendance: "HRMSEmployeeAttendanceSpec"
     };
 
     const tableName = tableMap[tabName];
@@ -1658,7 +1620,7 @@ const EmployeeManagement = () => {
     try {
       const rowData = tabData[tabName].data[index];
       const pkField = Object.keys(rowData).find(k =>
-        ['pk', 'id', 'ehid', 'academicid', 'employmentid', 'allowanceid', 'deductionid', 'familyid'].includes(k.toLowerCase())
+        ['pk', 'id', 'ehid', 'academicid', 'employmentid', 'allowanceid', 'deductionid', 'familyid', 'attendanceid'].includes(k.toLowerCase())
       ) || 'PK';
 
       const where = { [pkField]: rowData[pkField] };
@@ -1931,7 +1893,6 @@ const EmployeeManagement = () => {
   const handleNewEmployee = async () => {
     try {
       const nextCode = await generateNextCode();
-
       const today = getTodayDate();
 
       const defaultFormData = {
@@ -1949,7 +1910,8 @@ const EmployeeManagement = () => {
         Subtitute: null, EmployeeReplacementCode: null,
         JoiningDate: today,
         AppointmentDate: "", ProbitionDate: "", ContractStartDate: "",
-        ContractEndDate: "", LeftDate: "",
+        ContractEndDate: "",
+        LeftDate: "1900-01-01 00:00:00", // Set default LeftDate for new employees
         ContractType: 1, EmploymentStatus: 1, SalaryMode: 1,
         BasicPay: 0, GrossPay: 0, PerDayAvgCap: 0,
         BankCode: null, AccountNo: "", CardNo: null, MachineRegistrationNo: null,
@@ -2023,6 +1985,7 @@ const EmployeeManagement = () => {
   };
 
   const renderBasicTab = () => {
+    // All sections - no submenus, everything shown together
     const sections = [
       {
         key: 'personal',
@@ -2033,15 +1996,8 @@ const EmployeeManagement = () => {
           { name: "FName", label: "First Name", required: true, colSpan: 1 },
           { name: "MName", label: "Middle Name", colSpan: 1 },
           { name: "LName", label: "Last Name", colSpan: 1 },
-          { name: "arName", label: "Arabic Name", colSpan: 2 },
-          { name: "FatherName", label: "Father's Name", colSpan: 2 }
-        ]
-      },
-      {
-        key: 'details',
-        title: "Personal Details",
-        icon: <FaIdCard />,
-        fields: [
+          // { name: "arName", label: "Arabic Name", colSpan: 2 },
+          { name: "FatherName", label: "Father's Name", colSpan: 2 },
           { name: "DOB", label: "Date of Birth", type: "date", colSpan: 1 },
           { name: "Gender", label: "Gender", type: "select", options: genders, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
           { name: "MarriadStatus", label: "Marital Status", type: "select", options: maritalStatuses, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
@@ -2050,48 +2006,37 @@ const EmployeeManagement = () => {
           { name: "IDNo", label: "CNIC/NIC", placeholder: "12345-1234567-1", colSpan: 2 },
           { name: "IDExpiryDate", label: "ID Expiry", type: "date", colSpan: 1 },
           { name: "PassportNo", label: "Passport No", colSpan: 1 },
-          { name: "PassportExpiryDate", label: "Passport Expiry", type: "date", colSpan: 1 }
-        ]
-      },
-      {
-        key: 'contact',
-        title: "Contact Information",
-        icon: <FaEnvelope />,
-        fields: [
+          { name: "PassportExpiryDate", label: "Passport Expiry", type: "date", colSpan: 1 },
           { name: "Mobile", label: "Mobile", colSpan: 1 },
           { name: "Email", label: "Email", type: "email", colSpan: 2 },
-          { name: "P_Phone", label: "Phone", colSpan: 1 }
+          { name: "P_Phone", label: "Phone", colSpan: 1 },
+          { name: "NoOfDependant", label: "Number of Dependants", type: "number" },
+         
+          { name: "Remarks", label: "Remarks", type: "textarea", colSpan: 2 }
         ]
       },
       {
-        key: 'permanent',
-        title: "Permanent Address",
+        key: 'address',
+        title: "Address Information",
         icon: <FaHome />,
         fields: [
-          { name: "P_Country", label: "Country", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
-          { name: "P_City", label: "City", type: "select", options: formData.P_Country ? getCitiesByCountry(formData.P_Country) : [], valueKey: "CityID", labelKey: "CityName", dependsOn: "P_Country", colSpan: 1 },
-          { name: "P_Provience", label: "Province", colSpan: 1 },
-          { name: "P_Address", label: "Address", type: "textarea", colSpan: 3 },
-          { name: "P_PostalCode", label: "Postal Code", colSpan: 1 },
-          { name: "P_ContactPerson", label: "Contact Person", colSpan: 1 }
+          { name: "P_Country", label: "Permanent Country", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
+          { name: "P_City", label: "Permanent City", type: "select", options: formData.P_Country ? getCitiesByCountry(formData.P_Country) : [], valueKey: "CityID", labelKey: "CityName", dependsOn: "P_Country", colSpan: 1 },
+          { name: "P_Provience", label: "Permanent Province", colSpan: 1 },
+          { name: "P_Address", label: "Permanent Address", type: "textarea", colSpan: 3 },
+          { name: "P_PostalCode", label: "Permanent Postal Code", colSpan: 1 },
+          { name: "P_ContactPerson", label: "Permanent Contact Person", colSpan: 1 },
+          { name: "H_Country", label: "Home Country", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
+          { name: "H_City", label: "Home City", type: "select", options: formData.H_Country ? getCitiesByCountry(formData.H_Country) : [], valueKey: "CityID", labelKey: "CityName", dependsOn: "H_Country", colSpan: 1 },
+          { name: "H_Provience", label: "Home Province", colSpan: 1 },
+          { name: "H_Address", label: "Home Address", type: "textarea", colSpan: 3 },
+          { name: "H_PostalCode", label: "Home Postal Code", colSpan: 1 },
+          { name: "H_ContactPerson", label: "Home Contact Person", colSpan: 1 }
         ]
       },
       {
-        key: 'home',
-        title: "Home Address",
-        icon: <FaHome />,
-        fields: [
-          { name: "H_Country", label: "Country", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
-          { name: "H_City", label: "City", type: "select", options: formData.H_Country ? getCitiesByCountry(formData.H_Country) : [], valueKey: "CityID", labelKey: "CityName", dependsOn: "H_Country", colSpan: 1 },
-          { name: "H_Provience", label: "Province", colSpan: 1 },
-          { name: "H_Address", label: "Address", type: "textarea", colSpan: 3 },
-          { name: "H_PostalCode", label: "Postal Code", colSpan: 1 },
-          { name: "H_ContactPerson", label: "Contact Person", colSpan: 1 }
-        ]
-      },
-      {
-        key: 'employment-details',
-        title: "Employment Details",
+        key: 'employment',
+        title: "Employment Information",
         icon: <FaBriefcaseIcon />,
         fields: [
           { name: "DepartmentCode", label: "Department", type: "select", options: departments, valueKey: "Code", labelKey: "Name", colSpan: 1 },
@@ -2103,91 +2048,56 @@ const EmployeeManagement = () => {
           { name: "ManagerCode", label: "Manager", type: "select", options: allEmployees, valueKey: "Code", labelKey: "Name", colSpan: 1 },
           { name: "DepartmentHead", label: "Department Head", type: "select", options: allEmployees, valueKey: "Code", labelKey: "Name", colSpan: 1 },
           { name: "Subtitute", label: "Substitute", type: "select", options: allEmployees, valueKey: "Code", labelKey: "Name", colSpan: 1 },
-          { name: "EmployeeReplacementCode", label: "Replacement", type: "select", options: allEmployees, valueKey: "Code", labelKey: "Name", colSpan: 1 }
-        ]
-      },
-      {
-        key: 'dates',
-        title: "Employment Dates",
-        icon: <FaCalendar />,
-        fields: [
+          { name: "EmployeeReplacementCode", label: "Replacement", type: "select", options: allEmployees, valueKey: "Code", labelKey: "Name", colSpan: 1 },
           { name: "JoiningDate", label: "Joining Date", type: "date", colSpan: 1 },
           { name: "AppointmentDate", label: "Appointment", type: "date", colSpan: 1 },
           { name: "ProbitionDate", label: "Probation", type: "date", colSpan: 1 },
           { name: "ContractStartDate", label: "Contract Start", type: "date", colSpan: 1 },
           { name: "ContractEndDate", label: "Contract End", type: "date", colSpan: 1 },
-          { name: "LeftDate", label: "Left Date", type: "date", disabled: formData.IsActive === true, colSpan: 1 }
-        ]
-      },
-      {
-        key: 'salary',
-        title: "Contract & Salary",
-        icon: <FaMoneyBillWave />,
-        fields: [
+          { name: "CardNo", label: "Card No", colSpan: 1 },
+          { name: "MachineRegistrationNo", label: "Machine Reg No", colSpan: 1 },
+          // { name: "LeftDate", label: "Left Date", type: "date", disabled: formData.IsActive === true, colSpan: 1 },
           { name: "ContractType", label: "Contract Type", type: "select", options: contractTypes, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
-          {
-            name: "EmploymentStatus",
-            label: "Status",
-            type: "select",
-            options: documentStatuses,
-            valueKey: "ccode",
-            labelKey: "cname",
-            colSpan: 1
-          },
+          // { name: "EmploymentStatus", label: "Status", type: "select", options: documentStatuses, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
           { name: "SalaryMode", label: "Salary Mode", type: "select", options: salaryModes, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
           { name: "BasicPay", label: "Basic Pay", type: "number", colSpan: 1 },
           { name: "PerDayAvgCap", label: "Per Day Cap", type: "number", colSpan: 1 },
+          { name: "MainJobDuty", label: "Main Job Duty", type: "textarea", colSpan: 2 },
           { name: "EmployeePerDayType", label: "Pay Type", type: "select", options: employeePerDayTypes, valueKey: "ccode", labelKey: "cname", colSpan: 1 }
         ]
       },
       {
-        key: 'bank-details',
+        key: 'bank',
         title: "Bank Details",
         icon: <FaUniversityIcon />,
         fields: [
           { name: "BankCode", label: "Bank", type: "select", options: banks, valueKey: "Code", labelKey: "Name", colSpan: 1 },
           { name: "AccountNo", label: "Account No", colSpan: 1 },
-          { name: "CardNo", label: "Card No", colSpan: 1 },
-          { name: "MachineRegistrationNo", label: "Machine Reg No", colSpan: 1 }
+
         ]
       },
       {
-        key: 'system-fields',
+        key: 'system',
         title: "System Fields",
         icon: <FaCog />,
         fields: [
           { name: "IsActive", label: "Active", type: "checkbox", colSpan: 1 },
           { name: "isManagerFilter", label: "Manager Filter", type: "checkbox", colSpan: 1 },
           { name: "isUserFilter", label: "User Filter", type: "checkbox", colSpan: 1 },
-          { name: "MainJobDuty", label: "Main Job Duty", type: "textarea", colSpan: 2 },
-          { name: "Remarks", label: "Remarks", type: "textarea", colSpan: 2 }
+
+
         ]
       }
     ];
 
-    // Filter sections based on active header and submenu
+    // Filter sections based on active header (no submenus)
     const getVisibleSections = () => {
-      if (activeHeader === 'personal') {
-        if (activeSubmenu === 'basic') return sections.filter(s => s.key === 'personal');
-        if (activeSubmenu === 'details') return sections.filter(s => s.key === 'details');
-        if (activeSubmenu === 'contact') return sections.filter(s => s.key === 'contact');
-      }
-      if (activeHeader === 'address') {
-        if (activeSubmenu === 'permanent') return sections.filter(s => s.key === 'permanent');
-        if (activeSubmenu === 'home') return sections.filter(s => s.key === 'home');
-      }
-      if (activeHeader === 'employment') {
-        if (activeSubmenu === 'employment-details') return sections.filter(s => s.key === 'employment-details');
-        if (activeSubmenu === 'dates') return sections.filter(s => s.key === 'dates');
-        if (activeSubmenu === 'salary') return sections.filter(s => s.key === 'salary');
-      }
-      if (activeHeader === 'bank') {
-        if (activeSubmenu === 'bank-details') return sections.filter(s => s.key === 'bank-details');
-      }
-      if (activeHeader === 'system') {
-        if (activeSubmenu === 'system-fields') return sections.filter(s => s.key === 'system-fields');
-      }
-      return sections.filter(s => s.key === 'personal');
+      if (activeHeader === 'personal') return sections.filter(s => s.key === 'personal');
+      if (activeHeader === 'address') return sections.filter(s => s.key === 'address');
+      if (activeHeader === 'employment') return sections.filter(s => s.key === 'employment');
+      if (activeHeader === 'bank') return sections.filter(s => s.key === 'bank');
+      if (activeHeader === 'system') return sections.filter(s => s.key === 'system');
+      return sections;
     };
 
     const visibleSections = getVisibleSections();
@@ -2208,21 +2118,6 @@ const EmployeeManagement = () => {
                 </span>
                 <FaChevronDown className={`header-arrow ${openHeader === header.key ? 'open' : ''}`} />
               </button>
-
-              {/* Show submenu only when this header is open */}
-              {openHeader === header.key && (
-                <div className="submenuemployee">
-                  {header.submenus.map(submenu => (
-                    <button
-                      key={submenu.key}
-                      className={`submenu-btn ${activeSubmenu === submenu.key ? 'active' : ''}`}
-                      onClick={() => handleSubmenuClick(submenu.key, submenu.sectionKey)}
-                    >
-                      {submenu.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -2249,7 +2144,6 @@ const EmployeeManagement = () => {
                 }
 
                 if (field.type === "checkbox") {
-                  // Helper function to check if checkbox should be checked
                   const isChecked = (val) => {
                     if (val === true) return true;
                     if (val === false) return false;
@@ -2259,13 +2153,9 @@ const EmployeeManagement = () => {
                     return false;
                   };
 
-                  // Handle checkbox change for string "True"/"False" values
                   const handleCheckboxChange = (e) => {
                     const { name, checked } = e.target;
-                    // Convert boolean to string "True"/"False" to match database format
                     const dbValue = checked ? "True" : "False";
-
-                    // Create a synthetic event that mimics the original input change
                     const syntheticEvent = {
                       target: {
                         name: name,
@@ -2452,12 +2342,93 @@ const EmployeeManagement = () => {
       </div>
     );
   };
+
   const formatMoney = (amount) => {
-  return Number(amount || 0).toLocaleString("en-PK", {
-        minimumFractionDigits: 2,
+    return Number(amount || 0).toLocaleString("en-PK", {
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2
-  });
-};
+    });
+  };
+
+  // Status Change Modal Component
+  const StatusChangeModal = () => {
+    if (!showStatusModal) return null;
+
+    const statusName = pendingStatusChange?.cname || "";
+    const isActive = pendingStatusChange?.ccode === 1;
+    const isInactiveOrRetire = pendingStatusChange?.ccode === 2 || pendingStatusChange?.ccode === 3;
+
+    return (
+      <div className="modal-overlay">
+        <div className="modal-container">
+          <div className="modal-header">
+            <h3>Confirm Status Change</h3>
+            <button
+              className="modal-close"
+              onClick={() => {
+                setShowStatusModal(false);
+                setPendingStatusChange(null);
+                setPendingEmployeeCode(null);
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="modal-body">
+            <p>Are you sure you want to change employee status to <strong>{statusName}</strong>?</p>
+
+            {isActive && (
+              <div className="modal-field">
+                <label htmlFor="joiningDate">Joining Date:</label>
+                <input
+                  type="date"
+                  id="joiningDate"
+                  value={joiningDate}
+                  onChange={(e) => setJoiningDate(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            {isInactiveOrRetire && (
+              <div className="modal-field">
+                <label htmlFor="leftDate">Left Date:</label>
+                <input
+                  type="date"
+                  id="leftDate"
+                  value={leftDate}
+                  onChange={(e) => setLeftDate(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            {!isActive && !isInactiveOrRetire && (
+              <p>No date changes required for this status change.</p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button
+              className="modal-btn cancel"
+              onClick={() => {
+                setShowStatusModal(false);
+                setPendingStatusChange(null);
+                setPendingEmployeeCode(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="modal-btn confirm"
+              onClick={confirmStatusChange}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Show loading while rights are loading
   if (rightsLoading && !menuId) {
@@ -2483,32 +2454,55 @@ const EmployeeManagement = () => {
         />
       )}
 
-      {/* {!selectedEmployee && !isEditing && (
-        <DocumentStatusBar
-          statuses={documentStatusesAll}
-          selectedStatus={selectedStatus}
-          onStatusClick={handleStatusChange}
-          loading={isLoadingConfig}
-          showCounts={true}
-          counts={statusCounts}
-        />
-      )} */}
-
       {selectedEmployee || isEditing ? (
         <div className="employee-details">
+
           <div className="details-header">
             <h3>
               {isEditing ? (editMode === "new" ? "New Employee" : "Edit Employee") : "Employee Details"}
               {formData?.FName && ` - ${formData.FName} ${formData.LName || ''}`}
             </h3>
             <div className="header-actions">
-              {!isEditing ? (
+              {/* Show buttons for both existing employee and new employee */}
+              {isEditing ? (
+                // Edit mode (both for existing and new employee)
                 <>
+                  <button className="btn-cancel" onClick={handleCancelEdit}>
+                    <FaTimes /> Cancel
+                  </button>
+                  <button className="btn-save" onClick={saveEmployee} disabled={isSaving}>
+                    {isSaving ? <FaSpinner className="spinner" /> : <FaSave />}
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              ) : selectedEmployee ? (
+                // View mode (only when not editing and employee selected)
+                <>
+                  {(!menuId || hasPermission(menuId, 'post')) && (
+                    <StatusDropdown
+                      statuses={employeeStatusOptions[selectedEmployee.Code] || []}
+                      selectedStatus={
+                        (employeeStatusOptions[selectedEmployee.Code] || []).find(
+                          s => s.ccode === selectedEmployee.EmploymentStatus
+                        ) || {
+                          ccode: selectedEmployee.EmploymentStatus,
+                          cname: getEmploymentStatusInfo(selectedEmployee.EmploymentStatus).name
+                        }
+                      }
+                      onStatusChange={(status) => handleStatusChangeWithConfirmation(selectedEmployee.Code, status)}
+                      disabled={
+                        isLoadingConfig ||
+                        (employeeStatusOptions[selectedEmployee.Code] || []).length === 0
+                      }
+                    />
+                  )}
+
                   {menuId && hasPermission(menuId, 'edit') && (
                     <button className="btn-edit" onClick={() => setIsEditing(true)}>
                       <FaEdit /> Edit
                     </button>
                   )}
+
                   {menuId && hasPermission(menuId, 'print') && (
                     <button
                       className="btn-pdf"
@@ -2520,23 +2514,16 @@ const EmployeeManagement = () => {
                     </button>
                   )}
                 </>
-              ) : (
-                <>
-                  <button className="btn-cancel" onClick={handleCancelEdit}>
-                    <FaTimes /> Cancel
-                  </button>
-                  <button className="btn-save" onClick={saveEmployee} disabled={isSaving}>
-                    {isSaving ? <FaSpinner className="spinner" /> : <FaSave />}
-                    {isSaving ? "Saving..." : "Save"}
-                  </button>
-                </>
+              ) : null}
+
+              {/* Close button always shows when there's a selected employee OR in edit mode (but not for new employee? Actually keep it for new employee too) */}
+              {(selectedEmployee || isEditing) && (
+                <button className="btn-close" onClick={handleCloseDetails}>
+                  <FaTimes /> Close
+                </button>
               )}
-              <button className="btn-close" onClick={handleCloseDetails}>
-                <FaTimes /> Close
-              </button>
             </div>
           </div>
-
           <div className="tabs-container">
             <div className="tabs-scroll">
               <button
@@ -2561,7 +2548,6 @@ const EmployeeManagement = () => {
                   <FaGraduationCap /> Education
                 </button>
               )}
-
               {(!menuId || hasPermission(menuId, 'view')) && (
                 <button
                   className={`tab-btn ${activeTab === "employment" ? "active" : ""}`}
@@ -2570,7 +2556,6 @@ const EmployeeManagement = () => {
                   <FaBriefcase /> Employment
                 </button>
               )}
-
               {(!menuId || hasPermission(menuId, 'view')) && (
                 <button
                   className={`tab-btn ${activeTab === "allowances" ? "active" : ""}`}
@@ -2579,7 +2564,6 @@ const EmployeeManagement = () => {
                   <FaMoneyBill /> Allowances
                 </button>
               )}
-
               {(!menuId || hasPermission(menuId, 'view')) && (
                 <button
                   className={`tab-btn ${activeTab === "deductions" ? "active" : ""}`}
@@ -2588,7 +2572,6 @@ const EmployeeManagement = () => {
                   <FaMoneyCheck /> Deductions
                 </button>
               )}
-
               {(!menuId || hasPermission(menuId, 'view')) && (
                 <button
                   className={`tab-btn ${activeTab === "family" ? "active" : ""}`}
@@ -2713,7 +2696,9 @@ const EmployeeManagement = () => {
                   isEditing={isEditing}
                   onEdit={(index) => handleTabEdit("attendance", index)}
                   onCancel={(index) => handleTabCancel("attendance", index)}
+                  onNew={() => handleTabNew("attendance")}
                   onSave={(index, isNew) => saveTabRow("attendance", index, isNew)}
+                  onDelete={(index) => deleteTabRow("attendance", index)}
                   onInputChange={(index, field, value, isNew) =>
                     handleTabInputChange("attendance", index, field, value, isNew)
                   }
@@ -2737,37 +2722,7 @@ const EmployeeManagement = () => {
               />
             </div>
 
-            {/* <div className="filter-buttons">
-              <button
-                className={`filter-btn ${activeFilter === "all" ? "active" : ""}`}
-                onClick={() => handleFilterChange("all")}
-              >
-                All
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === "active" ? "active" : ""}`}
-                onClick={() => handleFilterChange("active")}
-              >
-                Active
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === "inactive" ? "active" : ""}`}
-                onClick={() => handleFilterChange("inactive")}
-              >
-                Inactive
-              </button>
-            </div> */}
-
             <div className="toolbar-actions">
-              {/* <button
-                className="btn-refresh"
-                onClick={handleRefreshAll}
-                disabled={refreshing}
-              >
-                <FaSyncAlt className={refreshing ? 'spinner' : ''} />
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button> */}
-
               {(!menuId || hasPermission(menuId, 'add')) && (
                 <button className="btn-new" onClick={handleNewEmployee}>
                   <FaPlus /> New Employee
@@ -2791,22 +2746,17 @@ const EmployeeManagement = () => {
                   <div className="header-cell">Designation</div>
                   <div className="header-cell">Basic Pay</div>
                   <div className="header-cell">Status</div>
-                  {/* <div className="header-cell">Active</div> */}
-                  {/* <div className="header-cell">Actions</div> */}
                 </div>
 
                 <div className="list-body">
                   {filteredEmployees.length > 0 ? (
                     filteredEmployees.map((item) => {
-                      const isActive = isEmployeeActive(item);
                       const deptName = getDepartmentName(item.DepartmentCode);
                       const desigName = getDesignationName(item.DesignationCode);
                       const statusInfo = getEmploymentStatusInfo(item.EmploymentStatus);
 
-                      const statusOptions = employeeStatusOptions[item.Code] || [];
-
                       return (
-                        <div key={item.Code} className="list-row" onClick={() => handleEmployeeSelect(item)} >
+                        <div key={item.Code} className="list-row" onClick={() => handleEmployeeSelect(item)}>
                           <div className="row-cell">{item.Code}</div>
                           <div className="row-cell">{item.Name || `${item.FName || ''} ${item.LName || ''}`.trim()}</div>
                           <div className="row-cell">{deptName}</div>
@@ -2817,43 +2767,6 @@ const EmployeeManagement = () => {
                               {statusInfo.name}
                             </span>
                           </div>
-                          {/* <div className="row-cell">
-                            <span className={`status-badge ${isActive ? "active" : "inactive"}`}>
-                              {isActive ? "Active" : "Inactive"}
-                            </span>
-                          </div> */}
-                          {/* <div className="row-cell actions">
-                            <button className="action-btn view" onClick={() => handleEmployeeSelect(item)} title="View">
-                              <FaEye />
-                            </button>
-                            {(!menuId || hasPermission(menuId, 'edit')) && (
-                              <button className="action-btn edit" onClick={() => { handleEmployeeSelect(item); setIsEditing(true); }} title="Edit">
-                                <FaEdit />
-                              </button>
-                            )}
-                            {(!menuId || hasPermission(menuId, 'print')) && (
-                              <button
-                                className="action-btn pdf"
-                                onClick={() => {
-                                  handleEmployeeSelect(item);
-                                  setTimeout(() => handleGeneratePDF(), 100);
-                                }}
-                                title="PDF"
-                              >
-                                <FaFilePdf />
-                              </button>
-                            )}
-
-                             {(!menuId || hasPermission(menuId, 'post')) && (
-                              <StatusDropdown
-                                statuses={statusOptions}
-                                selectedStatus={statusOptions.find(s => s.ccode == item.EmploymentStatus) ||
-                                  { ccode: item.EmploymentStatus, cname: statusInfo.name }}
-                                onStatusChange={(status) => updateEmploymentStatus(item.Code, status)}
-                                disabled={isLoadingConfig || statusOptions.length === 0}
-                              />
-                            )} 
-                          </div> */}
                         </div>
                       );
                     })
@@ -2879,6 +2792,8 @@ const EmployeeManagement = () => {
           </div>
         </>
       )}
+
+      <StatusChangeModal />
 
       <PDFPreviewModal
         isOpen={showPdf}

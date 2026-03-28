@@ -24,8 +24,8 @@ const AttendanceSpecTab = ({
 }) => {
   const [refreshing, setRefreshing] = useState(false);
   
-  // Extract the attendance data properly
-  const attendanceData = data?.data?.[0] || data?.[0] || data || {};
+  // Extract the attendance data properly - it's an array with one item
+  const attendanceData = data?.data?.[0] || data?.[0] || {};
   
   const index = 0;
   const isEditingThis = editState?.editing?.[index] || false;
@@ -50,7 +50,7 @@ const AttendanceSpecTab = ({
     onInputChange(index, name, value === "" ? "" : value, false);
   };
 
-  // CORRECT field names based on your debug data
+  // Attendance settings fields that are in HRMSEmployee table
   const attendanceFields = [
     { name: "offdayBonusAllow", label: "Off Day Bonus Allow", type: "checkbox" },
     { name: "AutoAttendanceAllow", label: "Auto Attendance Allow", type: "checkbox" },
@@ -62,7 +62,7 @@ const AttendanceSpecTab = ({
     { name: "EmployeeCommisionBonusActive", label: "Commission Bonus Active", type: "checkbox" },
     { name: "EmployeeEarlyLateDeductionOnTimeActive", label: "Early/Late Deduction Active", type: "checkbox" },
     { name: "EarlyLateNoofDeductionExempt", label: "Early/Late Exempt Days", type: "number" },
-    { name: "NoOfDependant", label: "Number of Dependants", type: "number" },
+    
     { name: "EmployeeCommisionBonusPer", label: "Commission Bonus %", type: "number" },
     { name: "OTAllowedPerDay", label: "OT Allowed Per Day", type: "number" }
   ];
@@ -83,7 +83,7 @@ const AttendanceSpecTab = ({
               await onRefresh?.();
               setRefreshing(false);
             }}
-            disabled={refreshing}
+            disabled={refreshing || saving}
           >
             <FaSyncAlt className={refreshing ? "spinner" : ""} />
           </button>
@@ -152,12 +152,19 @@ const AttendanceSpecTab = ({
                   }
                   disabled={!isEditingThis || saving}
                   placeholder="0"
+                  step="any"
                 />
               )}
             </div>
           );
         })}
       </div>
+      
+      {attendanceData.Code && (
+        <div className="info-message" style={{ marginTop: '20px', padding: '10px', background: '#f0f0f0', borderRadius: '4px', fontSize: '12px', color: '#666' }}>
+          <strong>Employee Code:</strong> {attendanceData.Code}
+        </div>
+      )}
     </div>
   );
 };

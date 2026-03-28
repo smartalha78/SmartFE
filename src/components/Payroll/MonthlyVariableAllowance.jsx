@@ -23,7 +23,8 @@ const API_CONFIG = {
     INSERT_VARIABLE_ALLOWANCE: `${API_BASE1}/insert-variable-allowance`,
     UPDATE_VARIABLE_ALLOWANCE: `${API_BASE1}/update-variable-allowance`,
     POST_VARIABLE_ALLOWANCE: `${API_BASE1}/post-variable-allowance`,
-    DELETE_VARIABLE_ALLOWANCE: `${API_BASE1}/delete-variable-allowance`
+    DELETE_VARIABLE_ALLOWANCE: `${API_BASE1}/delete-variable-allowance`,
+    CANCEL_VARIABLE_ALLOWANCE: `${API_BASE1}/cancel-variable-allowance`
 };
 
 /* ---------------------------
@@ -153,7 +154,13 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
         <div className="mva-employee-row">
             <div className="mva-row-index">{index + 1}</div>
             <div className="mva-row-field">
-                <select value={selectedEmployee} onChange={handleEmployeeChange} disabled={!canEdit} className="mva-select" required>
+                <select 
+                    value={selectedEmployee} 
+                    onChange={handleEmployeeChange} 
+                    disabled={!canEdit} 
+                    className="mva-select" 
+                    required
+                >
                     <option value="">Select Employee</option>
                     {employees.map(emp => (
                         <option key={emp.code} value={emp.code}>{emp.display}</option>
@@ -161,7 +168,13 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
                 </select>
             </div>
             <div className="mva-row-field">
-                <select value={selectedAllowance} onChange={handleAllowanceChange} disabled={!canEdit} className="mva-select" required>
+                <select 
+                    value={selectedAllowance} 
+                    onChange={handleAllowanceChange} 
+                    disabled={!canEdit} 
+                    className="mva-select" 
+                    required
+                >
                     <option value="">Select Allowance</option>
                     {allowances.map(allow => (
                         <option key={allow.code} value={allow.code}>{allow.display}</option>
@@ -172,11 +185,27 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
                 <div className="mva-amount-type">
                     {usePercentage ? (
                         <>
-                            <input type="number" step="0.01" value={percentage} onChange={handlePercentageChange} disabled={!canEdit} className="mva-input" placeholder="%" />
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                value={percentage} 
+                                onChange={handlePercentageChange} 
+                                disabled={!canEdit} 
+                                className="mva-input" 
+                                placeholder="%" 
+                            />
                             {calculatedAmount && <span className="mva-calculated-amount">= {calculatedAmount}</span>}
                         </>
                     ) : (
-                        <input type="number" step="0.01" value={amount} onChange={handleAmountChange} disabled={!canEdit} className="mva-input" placeholder="Amount" />
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            value={amount} 
+                            onChange={handleAmountChange} 
+                            disabled={!canEdit} 
+                            className="mva-input" 
+                            placeholder="Amount" 
+                        />
                     )}
                 </div>
             </div>
@@ -194,7 +223,7 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
 /* ---------------------------
  * Voucher Modal Component - All in One View
 ---------------------------- */
-const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mode, lookupData, currentOffcode, currentUser }) => {
+const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onCancel, mode, lookupData, currentOffcode, currentUser }) => {
     const [formData, setFormData] = useState({
         vdate: new Date().toISOString().split('T')[0],
         Remarks: '',
@@ -203,6 +232,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mod
     const [employees, setEmployees] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     const { allowances, employees: employeeList } = lookupData;
 
@@ -299,8 +329,22 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mod
         }
     }, [voucher, onPost, onClose]);
 
-    const canEdit = mode !== 'view' && formData.status !== '2';
+    const handleCancel = useCallback(async () => {
+        if (!window.confirm('Are you sure you want to cancel this voucher? This action cannot be undone.')) return;
+        setIsCancelling(true);
+        try {
+            await onCancel(voucher);
+            onClose();
+        } catch (error) {
+            console.error('Cancel error:', error);
+        } finally {
+            setIsCancelling(false);
+        }
+    }, [voucher, onCancel, onClose]);
+
+    const canEdit = mode !== 'view' && formData.status === '1';
     const isPosted = formData.status === '2';
+    const isCancelled = formData.status === '3';
 
     if (!isOpen) return null;
 
@@ -312,6 +356,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mod
                         {mode === 'new' ? 'New Variable Allowance' : mode === 'edit' ? 'Edit Variable Allowance' : 'View Variable Allowance'}
                         {formData.vno && <span className="mva-vno-badge">Voucher: {formData.vno}</span>}
                         {isPosted && <span className="mva-posted-badge">Posted</span>}
+                        {isCancelled && <span className="mva-cancelled-badge">Cancelled</span>}
                     </h2>
                     <button className="mva-modal-close" onClick={onClose}><Icons.X size={18} /></button>
                 </div>
@@ -403,7 +448,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mod
 
                     <div className="mva-modal-footer">
                         <button type="button" className="mva-btn mva-btn-outline" onClick={onClose}>
-                            Cancel
+                            Close
                         </button>
                         
                         {canEdit && mode !== 'view' && (
@@ -413,16 +458,27 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, mod
                             </button>
                         )}
                         
-                        {!isPosted && (
-                            <button 
-                                type="button" 
-                                className="mva-btn mva-btn-success" 
-                                onClick={handlePost} 
-                                disabled={isPosting}
-                            >
-                                {isPosting ? <Icons.Loader size={14} className="mva-spin" /> : <Icons.CheckCircle size={14} />}
-                                Post Voucher
-                            </button>
+                        {!isPosted && !isCancelled && formData.status === '1' && (
+                            <>
+                                <button 
+                                    type="button" 
+                                    className="mva-btn mva-btn-success" 
+                                    onClick={handlePost} 
+                                    disabled={isPosting}
+                                >
+                                    {isPosting ? <Icons.Loader size={14} className="mva-spin" /> : <Icons.CheckCircle size={14} />}
+                                    Post Voucher
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="mva-btn mva-btn-danger" 
+                                    onClick={handleCancel} 
+                                    disabled={isCancelling}
+                                >
+                                    {isCancelling ? <Icons.Loader size={14} className="mva-spin" /> : <Icons.XCircle size={14} />}
+                                    Cancel Voucher
+                                </button>
+                            </>
                         )}
                     </div>
                 </form>
@@ -485,7 +541,13 @@ const MonthlyVariableAllowance = () => {
             let whereClause = `offcode = '${currentOffcode}' AND vtype = 'VRA'`;
             if (search) whereClause += ` AND (vno LIKE '%${search}%' OR Remarks LIKE '%${search}%')`;
             
-            const payload = { tableName: 'HRMSVariableAllowanceHead', where: whereClause, page, limit: size, usePagination: true };
+            const payload = { 
+                tableName: 'HRMSVariableAllowanceHead', 
+                where: whereClause, 
+                page, 
+                limit: size, 
+                usePagination: true 
+            };
             const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -497,6 +559,8 @@ const MonthlyVariableAllowance = () => {
             if (data.success) {
                 setVouchers(data.rows || []);
                 setTotalCount(data.totalCount || 0);
+                
+                // Load lookup data only once
                 if (lookupData.employees.length === 0) {
                     const [employeeData, allowanceData] = await Promise.all([
                         fetchTableData('HrmsEmployee', currentOffcode, "IsActive = 1"),
@@ -627,6 +691,10 @@ const MonthlyVariableAllowance = () => {
             setMessage('⚠️ Cannot edit a posted voucher');
             return;
         }
+        if (voucher.status === '3') {
+            setMessage('⚠️ Cannot edit a cancelled voucher');
+            return;
+        }
         const voucherWithDetails = await fetchVoucherWithDetails(voucher.vockey, currentOffcode);
         if (voucherWithDetails) {
             setSelectedVoucher(voucherWithDetails);
@@ -648,9 +716,9 @@ const MonthlyVariableAllowance = () => {
             compcode: '01',
             createdby: currentUser,
             editby: currentUser,
-            status: '1',
-            bcode: '010101' // Default branch code
+            status: '1'
         };
+        
         if (mode === 'edit') {
             headData.vno = formData.vno;
             headData.vockey = formData.vockey;
@@ -673,7 +741,7 @@ const MonthlyVariableAllowance = () => {
         const payload = {
             head: { tableName: 'HRMSVariableAllowanceHead', data: headData },
             details,
-            selectedBranch: '010101', // Default branch
+            selectedBranch: '010101',
             offcode: currentOffcode
         };
 
@@ -737,6 +805,49 @@ const MonthlyVariableAllowance = () => {
         }
     }, [currentOffcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
 
+    const handleCancel = useCallback(async (voucher) => {
+        // REMOVED PERMISSION CHECK - Cancel button now works without permission
+        if (voucher.status === '2') {
+            setMessage('❌ Cannot cancel a posted voucher');
+            return;
+        }
+        if (voucher.status === '3') {
+            setMessage('❌ Voucher is already cancelled');
+            return;
+        }
+        if (!window.confirm(`Are you sure you want to cancel voucher ${voucher.vno}? This action cannot be undone.`)) return;
+
+        setIsSaving(true);
+        setMessage('');
+        try {
+            const payload = { 
+                vockey: voucher.vockey, 
+                offcode: currentOffcode,
+                cancelled_by: currentUser 
+            };
+            const resp = await fetch(API_CONFIG.CANCEL_VARIABLE_ALLOWANCE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const result = await resp.json();
+            
+            if (result.success) {
+                setMessage('✅ Voucher cancelled successfully');
+                await fetchVouchers(currentPage, pageSize, searchTerm);
+                setIsModalOpen(false);
+            } else {
+                setMessage(`❌ Cancel failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('❌ Cancel error:', error);
+            setMessage(`❌ Error: ${error.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    }, [currentOffcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
+
     const handleDelete = useCallback(async (voucher) => {
         if (!hasPermission?.(menuId, 'delete')) {
             setMessage('⚠️ You do not have permission to delete vouchers');
@@ -744,6 +855,10 @@ const MonthlyVariableAllowance = () => {
         }
         if (voucher.status === '2') {
             setMessage('❌ Cannot delete a posted voucher');
+            return;
+        }
+        if (voucher.status === '3') {
+            setMessage('❌ Cannot delete a cancelled voucher');
             return;
         }
         if (!window.confirm(`Are you sure you want to delete voucher ${voucher.vno}?`)) return;
@@ -779,9 +894,13 @@ const MonthlyVariableAllowance = () => {
     }, [hasPermission, menuId, currentOffcode, vouchers.length, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const getStatusBadge = useCallback((status) => {
-        return status === '2' ? 
-            <span className="mva-status-badge mva-posted">Posted</span> : 
-            <span className="mva-status-badge mva-draft">Draft</span>;
+        if (status === '2') {
+            return <span className="mva-status-badge mva-posted">Posted</span>;
+        } else if (status === '3') {
+            return <span className="mva-status-badge mva-cancelled">Cancelled</span>;
+        } else {
+            return <span className="mva-status-badge mva-draft">Draft</span>;
+        }
     }, []);
 
     if (rightsLoading && !menuId) {
@@ -877,7 +996,7 @@ const MonthlyVariableAllowance = () => {
                                                             <Icons.Eye size={14} />
                                                         </button>
                                                     )}
-                                                    {hasPermission?.(menuId, 'edit') && voucher.status !== '2' && (
+                                                    {hasPermission?.(menuId, 'edit') && voucher.status === '1' && (
                                                         <button 
                                                             className="mva-action-btn" 
                                                             onClick={() => handleEditVoucher(voucher)} 
@@ -899,7 +1018,17 @@ const MonthlyVariableAllowance = () => {
                                                             <Icons.CheckCircle size={14} />
                                                         </button>
                                                     )}
-                                                    {hasPermission?.(menuId, 'delete') && voucher.status !== '2' && (
+                                                    {/* CANCEL BUTTON - NO PERMISSION CHECK */}
+                                                    {voucher.status === '1' && (
+                                                        <button 
+                                                            className="mva-action-btn mva-cancel" 
+                                                            onClick={() => handleCancel(voucher)} 
+                                                            title="Cancel Voucher"
+                                                        >
+                                                            <Icons.XCircle size={14} />
+                                                        </button>
+                                                    )}
+                                                    {hasPermission?.(menuId, 'delete') && voucher.status === '1' && (
                                                         <button 
                                                             className="mva-action-btn mva-delete" 
                                                             onClick={() => handleDelete(voucher)} 
@@ -909,7 +1038,7 @@ const MonthlyVariableAllowance = () => {
                                                         </button>
                                                     )}
                                                 </div>
-                                             </td>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -943,7 +1072,8 @@ const MonthlyVariableAllowance = () => {
                 onClose={() => setIsModalOpen(false)} 
                 voucher={selectedVoucher} 
                 onSave={handleSave} 
-                onPost={handlePost} 
+                onPost={handlePost}
+                onCancel={handleCancel}
                 mode={modalMode} 
                 lookupData={lookupData} 
                 currentOffcode={currentOffcode} 
