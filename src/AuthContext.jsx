@@ -9,16 +9,17 @@ export const AuthProvider = ({ children }) => {
 
   const login = (creds) => {
     try {
-      // Ensure offcode has a default value if not provided
+      // Ensure offcode and bcode have default values if not provided
       const enhancedCreds = {
         ...creds,
-        offcode: creds.offcode || "1010" // Default to "1010" if not provided
+        offcode: creds.offcode || "1010",  // default offcode
+        bcode: creds.bcode || ""           // default bcode empty if not provided
       };
       
       setCredentials(enhancedCreds);
       localStorage.setItem("authCredentials", JSON.stringify(enhancedCreds));
       
-      // Also store uid separately if needed
+      // Optionally store uid separately
       if (creds.uid) {
         localStorage.setItem("userUid", creds.uid);
       }
@@ -40,10 +41,11 @@ export const AuthProvider = ({ children }) => {
         const storedCreds = localStorage.getItem("authCredentials");
         if (storedCreds) {
           const parsedCreds = JSON.parse(storedCreds);
-          // Ensure offcode exists when loading from storage
-          if (!parsedCreds.offcode) {
-            parsedCreds.offcode = "1010";
-          }
+
+          // Ensure offcode and bcode exist when loading from storage
+          if (!parsedCreds.offcode) parsedCreds.offcode = "1010";
+          if (!parsedCreds.bcode) parsedCreds.bcode = "";
+
           setCredentials(parsedCreds);
         }
       } catch (e) {
@@ -62,13 +64,19 @@ export const AuthProvider = ({ children }) => {
     return credentials?.uid || localStorage.getItem("userUid") || "";
   };
 
+  // Helper to get current bcode
+  const getCurrentBcode = () => {
+    return credentials?.bcode || "";
+  };
+
   return (
     <AuthContext.Provider value={{ 
       credentials, 
       login, 
       logout, 
       isLoading,
-      getCurrentUserId  // Add this helper
+      getCurrentUserId,
+      getCurrentBcode  // New helper for bcode
     }}>
       {children}
     </AuthContext.Provider>

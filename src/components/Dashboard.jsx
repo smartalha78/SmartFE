@@ -59,6 +59,7 @@ import LabourProfile from "./MasterData/LabourProfile";
 import MonthlyVariableAllowance from "./Payroll/MonthlyVariableAllowance";
 // import Vechiles from "../components/Vechiles";
 import AttendanceMachines from "./MasterData/AttendanceMachines";
+import AttendanceManagement from "./Payroll/AttendanceManagement";
 // import BOMCreation from "./MRP/BOMCreation";
 // import EInvoice from "../components/EInvioce";
 import { FiMenu, FiChevronDown, FiChevronRight, FiChevronLeft } from 'react-icons/fi';
@@ -134,6 +135,7 @@ const menuIcons = {
   "CityProfile": <FaBook />,
   "OrganizationalChart": <FaBook />,
   "AttendanceMachines": <FaBook />,
+  "AttendanceManagement": <FaBook />,
   "BOMCreation": <FaBook />,
   "LabourProfile": <FaBook />,
     "MonthlyVariableAllowance": <FaBook />,
@@ -400,6 +402,7 @@ function Dashboard() {
   const openMonthlyVariableAllowanceTypeModal = createModalOpener("MonthlyVariableAllowance");
   const openVechilesTypeModal = createModalOpener("Vechiles");
   const openAttendanceMachinesTypeModal = createModalOpener("AttendanceMachines");
+  const openAttendanceManagementTypeModal = createModalOpener("AttendanceManagement");
   const openBOMCreationTypeModal = createModalOpener("BOMCreation");
 
   // Special case for department modal (nested modal)
@@ -497,6 +500,7 @@ function Dashboard() {
       "Monthly Variable Allowance": "MonthlyVariableAllowance",
       "Vechiles": "Vechiles",
       "Attendance Machines": "AttendanceMachines",
+      "Attendance": "AttendanceManagement",
       "BOM Creation": "BOMCreation",
       "Size": "IMFSize"
     };
@@ -760,6 +764,10 @@ function Dashboard() {
     }
     if (clickedItem.title === "Attendance Machines") {
       openAttendanceMachinesTypeModal();
+      return;
+    }
+    if (clickedItem.title === "Attendance") {
+      openAttendanceManagementTypeModal();
       return;
     }
     if (clickedItem.title === "BOM Creation") {
@@ -1081,6 +1089,9 @@ function Dashboard() {
       case "AttendanceMachines":
         ModalComponent = AttendanceMachines;
         break;
+      case "AttendanceManagement":
+        ModalComponent = AttendanceManagement;
+        break;
       // case "BOMCreation":
       //   ModalComponent = BOMCreation;
       //   break;
@@ -1227,6 +1238,7 @@ function Dashboard() {
       'LabourProfile': 'Labour Profile',
       'MonthlyVariableAllowance': 'Monthly Variable Allowance ',
       'AttendanceMachines': 'Attendance Machines',
+      'AttendanceManagement': 'Attendance',
       'BOMCreation': 'BOM Creation',
       'CustomerSupplierProfile': 'Customer/Supplier Profile',
       // 'einvoice': 'E-Invoice'

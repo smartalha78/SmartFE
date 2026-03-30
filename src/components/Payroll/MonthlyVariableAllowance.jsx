@@ -36,9 +36,17 @@ const useAuth = () => {
     
     const credentials = context.credentials || {};
     const uid = credentials?.Uid || credentials?.uid || credentials?.userid || 
-                credentials?.userId || credentials?.ID || localStorage.getItem("userUid") || '';
+                credentials?.userId || credentials?.ID || localStorage.getItem("userUid") || '07';
+    const bcode = credentials?.bcode || localStorage.getItem("userBcode") || '010101';
+    const offcode = credentials?.offcode || '0101';
     
-    return { ...context, credentials, uid };
+    return { 
+        ...context, 
+        credentials, 
+        uid,
+        bcode,
+        offcode
+    };
 };
 
 /* ---------------------------
@@ -221,9 +229,9 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
 });
 
 /* ---------------------------
- * Voucher Modal Component - All in One View
+ * Voucher Modal Component
 ---------------------------- */
-const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onCancel, mode, lookupData, currentOffcode, currentUser }) => {
+const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onCancel, mode, lookupData, currentOffcode, currentUser, currentBcode }) => {
     const [formData, setFormData] = useState({
         vdate: new Date().toISOString().split('T')[0],
         Remarks: '',
@@ -363,7 +371,6 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
 
                 <form onSubmit={handleSubmit} className="mva-modal-form">
                     <div className="mva-modal-body">
-                        {/* Header Section - All fields in one place */}
                         <div className="mva-form-section">
                             <div className="mva-form-row">
                                 <div className="mva-form-group">
@@ -394,7 +401,6 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                             </div>
                         </div>
 
-                        {/* Employee Allowances Section */}
                         <div className="mva-employees-section">
                             <div className="mva-employees-header">
                                 <div className="mva-employees-title">
@@ -491,9 +497,10 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
  * Main Component
 ---------------------------- */
 const MonthlyVariableAllowance = () => {
-    const { credentials, uid } = useAuth();
+    const { credentials, uid, bcode, offcode: authOffcode } = useAuth();
     const { hasPermission, loading: rightsLoading } = useRights();
-    const currentOffcode = useMemo(() => credentials?.offcode || credentials?.company?.offcode || '0101', [credentials]);
+    const currentOffcode = useMemo(() => authOffcode || credentials?.offcode || '0101', [authOffcode, credentials]);
+    const currentBcode = useMemo(() => bcode || credentials?.bcode || '010101', [bcode, credentials]);
     const currentUser = useMemo(() => credentials?.username || 'SYSTEM', [credentials]);
 
     const [vouchers, setVouchers] = useState([]);
@@ -560,7 +567,6 @@ const MonthlyVariableAllowance = () => {
                 setVouchers(data.rows || []);
                 setTotalCount(data.totalCount || 0);
                 
-                // Load lookup data only once
                 if (lookupData.employees.length === 0) {
                     const [employeeData, allowanceData] = await Promise.all([
                         fetchTableData('HrmsEmployee', currentOffcode, "IsActive = 1"),
@@ -741,7 +747,7 @@ const MonthlyVariableAllowance = () => {
         const payload = {
             head: { tableName: 'HRMSVariableAllowanceHead', data: headData },
             details,
-            selectedBranch: '010101',
+            selectedBranch: currentBcode,
             offcode: currentOffcode
         };
 
@@ -768,7 +774,7 @@ const MonthlyVariableAllowance = () => {
         } finally {
             setIsSaving(false);
         }
-    }, [currentUser, currentOffcode, currentPage, pageSize, searchTerm, fetchVouchers]);
+    }, [currentUser, currentOffcode, currentBcode, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const handlePost = useCallback(async (voucher) => {
         setIsSaving(true);
@@ -777,7 +783,7 @@ const MonthlyVariableAllowance = () => {
             const payload = { 
                 vockey: voucher.vockey, 
                 offcode: currentOffcode, 
-                bcode: '010101', 
+                bcode: currentBcode, 
                 vtype: 'VRA', 
                 ostatus: 1,
                 posted_by: currentUser 
@@ -803,10 +809,10 @@ const MonthlyVariableAllowance = () => {
         } finally {
             setIsSaving(false);
         }
-    }, [currentOffcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
+    }, [currentOffcode, currentBcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const handleCancel = useCallback(async (voucher) => {
-        // REMOVED PERMISSION CHECK - Cancel button now works without permission
+        // Cancel button works without permission check
         if (voucher.status === '2') {
             setMessage('❌ Cannot cancel a posted voucher');
             return;
@@ -1018,7 +1024,7 @@ const MonthlyVariableAllowance = () => {
                                                             <Icons.CheckCircle size={14} />
                                                         </button>
                                                     )}
-                                                    {/* CANCEL BUTTON - NO PERMISSION CHECK */}
+                                                    {/* Cancel Button - Always shows for draft vouchers (status = 1) */}
                                                     {voucher.status === '1' && (
                                                         <button 
                                                             className="mva-action-btn mva-cancel" 
@@ -1077,7 +1083,8 @@ const MonthlyVariableAllowance = () => {
                 mode={modalMode} 
                 lookupData={lookupData} 
                 currentOffcode={currentOffcode} 
-                currentUser={currentUser} 
+                currentUser={currentUser}
+                currentBcode={currentBcode}
             />
         </div>
     );

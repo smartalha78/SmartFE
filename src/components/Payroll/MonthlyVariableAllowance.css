@@ -902,3 +902,39 @@ body{
 .mva-table td:first-child {
     width: auto;
 }
+/* Cancel button styles */
+.mva-action-btn.mva-cancel {
+    color: #dc3545;
+}
+
+.mva-action-btn.mva-cancel:hover {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.mva-btn.mva-btn-danger {
+    background: #dc3545;
+    color: white;
+    border: 1px solid #dc3545;
+}
+
+.mva-btn.mva-btn-danger:hover:not(:disabled) {
+    background: #c82333;
+    border-color: #bd2130;
+}
+
+.mva-status-badge.mva-cancelled {
+    background: #dc3545;
+    color: white;
+}
+
+.mva-cancelled-badge {
+    display: inline-block;
+    background: #dc3545;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-left: 12px;
+    font-weight: normal;
+}
