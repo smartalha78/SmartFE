@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import "./ChartofAccount.css";
+import "./AttendanceMachines.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
 import API_BASE1 from "../../config";
@@ -44,6 +44,27 @@ const Icon = {
     CheckCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
     XCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
     Settings: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+    Attendance: (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Clock circle */}
+    <circle cx="12" cy="12" r="10" />
+    {/* Clock hands */}
+    <line x1="12" y1="6" x2="12" y2="12" />
+    <line x1="12" y1="12" x2="16" y2="14" />
+    {/* Optional checkmark for attendance */}
+    <polyline points="9 12 12 15 17 10" />
+  </svg>),
     Users: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
     ChevronDown: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
 };
@@ -184,43 +205,11 @@ const MachineForm = ({
 
     return (
         <section className="detail-panel">
-            <div className="detail-header">
-                <div className="header-content">
-                    <h1>{isNewMode ? 'Add New Machine' : `Machine Details: ${Name || 'Machine'}`}</h1>
-                    <div className="header-subtitle">
-                        <span className="mode-badge">{isNewMode ? 'NEW' : 'EDIT'}</span>
-                        <span className="muted">• Code: {Code || 'No Code'}</span>
-                        <span className="muted">• Office: {currentOffcode}</span>
-                        {!(IsActive === 'true') && <span className="inactive-badge">INACTIVE</span>}
-                    </div>
-                </div>
-                <div className="header-actions">
-                    {canEdit && (
-                        <>
-                            <button
-                                className="btn btn-outline"
-                                onClick={onNewMachine}
-                            >
-                                <Icon.Plus /> New Machine
-                            </button>
-                            <button
-                                className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
-                                onClick={onSave}
-                                disabled={isLoading || !Name || !Code}
-                            >
-                                {isLoading ? <Icon.Loader className="spin" /> : <Icon.Save />}
-                                {isLoading ? 'Saving...' : 'Save Machine'}
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
             <div className="detail-body">
                 {/* Basic Information */}
-                <div className="form-section expanded">
+                <div className="machine-form-section expanded">
                     <div className="section-header">
-                        <div className="section-title">
+                        <div className="machine-section-title">
                             <Icon.Cpu />
                             <h3>Basic Information</h3>
                         </div>
@@ -279,9 +268,9 @@ const MachineForm = ({
                 </div>
 
                 {/* Communication Settings */}
-                <div className="form-section expanded">
+                <div className="machine-form-section expanded">
                     <div className="section-header">
-                        <div className="section-title">
+                        <div className="machine-section-title">
                             <Icon.Settings />
                             <h3>Communication Settings</h3>
                         </div>
@@ -380,9 +369,9 @@ const MachineForm = ({
                 </div>
 
                 {/* Attendance Settings */}
-                <div className="form-section expanded">
+                <div className="machine-form-section expanded">
                     <div className="section-header">
-                        <div className="section-title">
+                        <div className="machine-section-title">
                             <Icon.Settings />
                             <h3>Attendance Settings</h3>
                         </div>
@@ -704,41 +693,14 @@ const MachineManagement = () => {
     const MachineManagementSidebar = () => {
         return (
             <aside className="sidebar">
-                <div className="sidebar-top">
-                    <div className="sidebar-title">
-                        <Icon.Cpu className="big" />
-                        <div>
-                            <div className="h3">Machine Management</div>
-                            <div className="muted small">{machineData.length} machines • Office: {currentOffcode}</div>
-                        </div>
-                    </div>
-                    
-                    <div className="search-wrap">
-                        <Icon.Search className="search-icon" />
-                        <input
-                            type="text"
-                            placeholder="Search machines..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-
-                    <button
-                        className="btn btn-icon"
-                        onClick={refetch}
-                        disabled={isDataLoading}
-                        title="Refresh data"
-                    >
-                        <Icon.Refresh className={isDataLoading ? 'spin' : ''} />
-                    </button>
-                </div>
-
                 <div className="sidebar-body">
                     {isDataLoading && machineData.length === 0 ? (
                         <div className="loading-message">
                             <Icon.Loader className="spin" /> Loading Machines...
                         </div>
                     ) : filteredMachines.length > 0 ? (
+
+                        
                         <div className="machine-list">
                             {filteredMachines.map(machine => (
                                 <div
@@ -782,6 +744,8 @@ const MachineManagement = () => {
                                 </div>
                             ))}
                         </div>
+
+
                     ) : (
                         <div className="empty-state">
                             <Icon.Cpu className="big-muted" />
@@ -807,27 +771,19 @@ const MachineManagement = () => {
 
     return (
         <div className="cfa-page">
-            <div className="app-header">
-                <div className="header-brand">
-                    <Icon.Cpu className="brand-icon" />
-                    <div>
-                        <h1>Machine Management</h1>
-                        <div className="muted">Manage attendance machines and devices</div>
+            <div className="machine-toolbar">
+                <div className="toolbar-section">
+                    <div className="search-wrap">
+                        <Icon.Search className="search-icon" />
+                        <input
+                            type="text"
+                            placeholder="Search machines..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
                     </div>
                 </div>
-                <div className="header-user">
-                    <Icon.Users className="icon-sm" />
-                    <span>{currentUser}</span>
-                </div>
-            </div>
-
-            <div className="toolbar">
                 <div className="toolbar-section">
-                    {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
-                        <button className="toolbar-btn primary" onClick={handleSave} disabled={isSaving}>
-                            <Icon.Save /> {isSaving ? 'Saving...' : 'Save'}
-                        </button>
-                    )}
                     {hasPermission && hasPermission(menuId, 'add') && (
                         <button className="toolbar-btn" onClick={handleNewMachine}>
                             <Icon.Plus /> New Machine
@@ -844,13 +800,14 @@ const MachineManagement = () => {
                             <Icon.Edit /> Edit
                         </button>
                     )}
+                    {(hasPermission && (hasPermission(menuId, 'add') || hasPermission(menuId, 'edit'))) && (
+                        <button className="toolbar-btn primary" onClick={handleSave} disabled={isSaving}>
+                            <Icon.Save /> {isSaving ? 'Saving...' : 'Save'}
+                        </button>
+                    )}
                 </div>
 
-                <div className="toolbar-section">
-                    <button className="toolbar-btn" onClick={refetch}>
-                        <Icon.Refresh /> Refresh
-                    </button>
-                </div>
+                
             </div>
 
             {error && (
@@ -863,28 +820,12 @@ const MachineManagement = () => {
                 </div>
             )}
 
-            {message && (
-                <div className={`toast ${message.includes('❌') ? 'error' : message.includes('⚠️') ? 'warning' : 'success'}`}>
-                    <div className="toast-content">
-                        {message.includes('✅') && <Icon.CheckCircle />}
-                        {message.includes('❌') && <Icon.XCircle />}
-                        {message.includes('⚠️') && <Icon.XCircle />}
-                        <span>{message.replace(/[✅❌⚠️]/g, '')}</span>
-                    </div>
-                    <button className="toast-close" onClick={() => setMessage('')}>×</button>
-                </div>
-            )}
+            
 
             <div className="content-area">
                 <MachineManagementSidebar />
 
                 <div className="main-content">
-                    <div className="content-tabs">
-                        <button className="tab active">
-                            <Icon.Cpu /> Machine Details
-                        </button>
-                    </div>
-
                     <div className="content-panel">
                         <MachineForm
                             formData={formData}

@@ -10,6 +10,30 @@ import {
     GenericFormPopup
 } from "../Common/GenericFunctions";
 
+// Helper function to make authenticated fetch requests
+const authFetch = async (url, options = {}) => {
+    const token = localStorage.getItem('authToken');
+    
+    const enhancedOptions = {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+    };
+    
+    const response = await fetch(url, enhancedOptions);
+    
+    if (response.status === 401) {
+        console.error('Unauthorized request to:', url);
+        // Optionally redirect to login
+        // window.location.href = '/login';
+    }
+    
+    return response;
+};
+
 const HRMSGenericManager = ({
     moduleType = "allowance",
     moduleConfig,
@@ -85,7 +109,6 @@ const HRMSGenericManager = ({
             const updatedConfig = { ...baseConfig };
 
             if (countriesList && countriesList.length > 0) {
-                // Update CountryID dropdown options
                 updatedConfig.fields = {
                     ...updatedConfig.fields,
                     dropdowns: [
@@ -143,11 +166,11 @@ const HRMSGenericManager = ({
         setSuccessMessage,
     } = useGenericFunctions(dynamicConfig, API_BASE, credentials, itemsPerPage);
 
-    // ✅ Helper to fetch JSON safely
+    // ✅ Helper to fetch JSON safely with authentication
     const fetchJson = async (url, options = {}) => {
         console.log(`🌐 Fetching from HRMSGenericManager: ${url}`);
         try {
-            const res = await fetch(url, {
+            const res = await authFetch(url, {
                 headers: {
                     "Content-Type": "application/json",
                     ...options.headers
@@ -167,7 +190,6 @@ const HRMSGenericManager = ({
         try {
             const currentOffcode = credentials?.company?.offcode || '0101';
             
-            // Build where clause for active countries
             const whereClause = `offcode = '${currentOffcode}'`;
             
             const data = await fetchJson(`${API_BASE}/get-table-data`, {
@@ -198,7 +220,6 @@ const HRMSGenericManager = ({
         try {
             const currentOffcode = credentials?.company?.offcode || '0101';
             
-            // Build where clause for active cities
             const whereClause = `offcode = '${currentOffcode}'`;
             
             const data = await fetchJson(`${API_BASE}/get-table-data`, {
@@ -254,14 +275,12 @@ const HRMSGenericManager = ({
     const getTableHeaders = () => {
         const headers = [];
 
-        // Basic fields
         if (dynamicConfig.fields.basic) {
             headers.push(...dynamicConfig.fields.basic.map(field =>
                 ({ key: field, label: field, type: 'basic' })
             ));
         }
 
-        // Additional display fields
         if (dynamicConfig.fields.texts) {
             const displayTexts = dynamicConfig.fields.texts.filter(field =>
                 !['Address', 'BranchManager'].includes(field)
@@ -271,18 +290,14 @@ const HRMSGenericManager = ({
             ));
         }
 
-        // Dropdown fields - show friendly names
         if (dynamicConfig.fields.dropdowns) {
             headers.push(...dynamicConfig.fields.dropdowns.map(field => {
-                // Show "Country" instead of "CountryCode" for bank module
                 if (field.name === "CountryCode" && moduleType === "bank") {
                     return { key: field.name, label: "Country", type: 'dropdown' };
                 }
-                // Show "City" instead of "CityCode" for bank module
                 if (field.name === "CityCode" && moduleType === "bank") {
                     return { key: field.name, label: "City", type: 'dropdown' };
                 }
-                // Show "Country" instead of "CountryID" for city module
                 if (field.name === "CountryID" && moduleType === "city") {
                     return { key: field.name, label: "Country", type: 'dropdown' };
                 }
@@ -290,7 +305,6 @@ const HRMSGenericManager = ({
             }));
         }
 
-        // Checkbox status fields
         if (dynamicConfig.fields.checkboxes) {
             headers.push(...dynamicConfig.fields.checkboxes.map(field =>
                 ({ key: field, label: field, type: 'status', center: true })
@@ -302,7 +316,6 @@ const HRMSGenericManager = ({
         return headers;
     };
 
-    // Helper function to get a unique ID from an item
     const getItemId = (item) => {
         return item.id || 
                item.Code || 
@@ -313,10 +326,9 @@ const HRMSGenericManager = ({
                item.CountryID || 
                item.ccaCode ||
                item.ccode ||
-               JSON.stringify(item).substring(0, 20); // Fallback
+               JSON.stringify(item).substring(0, 20);
     };
 
-    // Render table cell based on item and header
     const renderTableCell = (item, header, itemId) => {
         if (header.type === 'actions') {
             return (
@@ -332,7 +344,6 @@ const HRMSGenericManager = ({
             );
         }
 
-        // Show country name instead of country ID for city module
         if (header.key === 'CountryID' && moduleType === "city") {
             const countryId = item[header.key];
             const country = countries.find(c => String(c.CountryID) === String(countryId));
@@ -345,7 +356,6 @@ const HRMSGenericManager = ({
             );
         }
 
-        // Show country name instead of CountryCode for bank module
         if (header.key === 'CountryCode' && moduleType === "bank") {
             const countryId = item[header.key];
             const country = countries.find(c => String(c.CountryID) === String(countryId));
@@ -358,7 +368,6 @@ const HRMSGenericManager = ({
             );
         }
 
-        // Show city name instead of city ID for bank module
         if (header.key === 'CityCode' && moduleType === "bank") {
             const cityId = item[header.key];
             const city = cities.find(c => String(c.CityID) === String(cityId));
@@ -371,19 +380,8 @@ const HRMSGenericManager = ({
             );
         }
 
-        // Handle status fields
         if (header.type === 'status') {
             const value = item[header.key];
-            
-            // Log the actual value for debugging (optional - remove in production)
-            // console.log(`🔍 Status check for ${header.key}:`, {
-            //     field: header.key,
-            //     value: value,
-            //     type: typeof value,
-            //     isActive: isActiveValue(value)
-            // });
-            
-            // Use the isActiveValue helper function for consistent checking
             const isActive = isActiveValue(value);
 
             return (
@@ -395,7 +393,6 @@ const HRMSGenericManager = ({
             );
         }
 
-        // Default text display
         return (
             <div className="hrms-list-cell" key={`${itemId}-${header.key}`}>
                 <h6>{item[header.key] !== undefined && item[header.key] !== null ? String(item[header.key]) : '-'}</h6>
@@ -403,7 +400,6 @@ const HRMSGenericManager = ({
         );
     };
 
-    // Show loading state
     if (isInitialLoad && loading) {
         return (
             <div className="hrms-category-container">
@@ -419,7 +415,6 @@ const HRMSGenericManager = ({
 
     return (
         <div className={`hrms-category-container ${showPopup ? 'popup-open' : ''}`}>
-            {/* Popup Form */}
             {showPopup && (
                 <GenericFormPopup
                     moduleConfig={dynamicConfig}
@@ -433,7 +428,6 @@ const HRMSGenericManager = ({
                 />
             )}
 
-            {/* Messages */}
             <div className="message-container">
                 {error && (
                     <div className="error-message">
@@ -447,10 +441,8 @@ const HRMSGenericManager = ({
                 )}
             </div>
 
-            {/* Header with navigation */}
             <div className="hrms-header-section">
                 <div className="header-nav">
-                    {/* Toolbar */}
                     <div className="hrms-flex">
                         <div className="hrms-search-box">
                             <input
@@ -462,7 +454,6 @@ const HRMSGenericManager = ({
                             />
                         </div>
 
-                        {/* Active Status Filter */}
                         {dynamicConfig.fields.hasActiveFilter && (
                             <div className="hrms-filter-buttons">
                                 <div className="hrms-w-50">
@@ -483,7 +474,6 @@ const HRMSGenericManager = ({
                             </div>
                         )}
 
-                        {/* Custom Filter */}
                         {dynamicConfig.fields.hasCustomFilter && (
                             <div className="filter-buttons">
                                 <span>Type:</span>
@@ -509,7 +499,6 @@ const HRMSGenericManager = ({
                         </div>
                     </div>
 
-                    {/* Table Header */}
                     <div className="hrms-category-list-header">
                         {tableHeaders.map(header => (
                             <h5
@@ -521,7 +510,6 @@ const HRMSGenericManager = ({
                         ))}
                     </div>
 
-                    {/* Table Body */}
                     <div className="popup-body hrms-category-list">
                         {loading && !isInitialLoad ? (
                             <div className="loading-inline">
@@ -547,7 +535,6 @@ const HRMSGenericManager = ({
                             </div>
                         )}
 
-                        {/* Pagination */}
                         {totalPages > 1 && (
                             <Pagination
                                 currentPage={currentPage}

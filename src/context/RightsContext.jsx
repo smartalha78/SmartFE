@@ -19,8 +19,9 @@ export const RightsProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Helper function to check if a value is truthy
+  // Helper function to check if a value is truthy (handles 1, '1', true, 'True', 'true')
   const isTruthy = (value) => {
+    if (value === null || value === undefined) return false;
     if (value === true || value === 1 || value === '1' || value === 'True' || value === 'true') {
       return true;
     }
@@ -29,22 +30,26 @@ export const RightsProvider = ({ children }) => {
 
   // Get user ID from credentials
   const getUserId = useCallback(() => {
-    // Check if credentials exist and have Uid
-    if (credentials?.Uid) {
-      return credentials.Uid;
-    }
+    // Check multiple possible field names
+    if (credentials?.Uid) return String(credentials.Uid);
+    if (credentials?.uid) return String(credentials.uid);
+    if (credentials?.user_id) return String(credentials.user_id);
+    if (credentials?.userId) return String(credentials.userId);
     
     // Try to get from localStorage as fallback
     try {
       const storedCreds = localStorage.getItem("authCredentials");
       if (storedCreds) {
         const parsed = JSON.parse(storedCreds);
-        if (parsed.Uid) {
-          return parsed.Uid;
-        }
+        if (parsed.Uid) return String(parsed.Uid);
+        if (parsed.uid) return String(parsed.uid);
+        if (parsed.user_id) return String(parsed.user_id);
       }
+      
+      const storedUid = localStorage.getItem('userUid');
+      if (storedUid) return String(storedUid);
     } catch (e) {
-      console.error("Error parsing authCredentials:", e);
+      console.error("Error getting user ID:", e);
     }
     
     return null;
@@ -70,11 +75,16 @@ export const RightsProvider = ({ children }) => {
       
       console.log('RightsContext - API Response:', response);
       
-      if (response.success) {
-        // Transform the rights data to ensure consistent boolean values
+      if (response.success && response.rights) {
+        // Transform the rights data - keep menuId as string
         const transformedRights = {};
-        Object.entries(response.rights || {}).forEach(([menuId, rights]) => {
-          transformedRights[menuId] = {
+        
+        // response.rights is an object with menuId as keys
+        Object.entries(response.rights).forEach(([menuId, rights]) => {
+          // Convert menuId to string for consistent comparison
+          const menuIdStr = String(menuId);
+          
+          transformedRights[menuIdStr] = {
             IsAdd: isTruthy(rights.IsAdd),
             IsEdit: isTruthy(rights.IsEdit),
             IsDelete: isTruthy(rights.IsDelete),
@@ -85,18 +95,23 @@ export const RightsProvider = ({ children }) => {
             IsUpload: isTruthy(rights.IsUpload),
             IsBackDate: isTruthy(rights.IsBackDate),
             Isfavorite: isTruthy(rights.Isfavorite),
-            IsActive: isTruthy(rights.IsActive)
+            IsActive: isTruthy(rights.IsActive),
+            isDesktop: isTruthy(rights.isDesktop)
           };
         });
+        
         console.log('RightsContext - Transformed Rights:', transformedRights);
+        console.log('RightsContext - Rights for menu 01:', transformedRights['01']);
         setUserRights(transformedRights);
       } else {
         console.error('Failed to load user rights:', response.error);
-        setError(response.error);
+        setError(response.error || 'Failed to load user rights');
+        setUserRights({});
       }
     } catch (err) {
       console.error('Error loading user rights:', err);
       setError(err.message);
+      setUserRights({});
     } finally {
       setLoading(false);
     }
@@ -108,15 +123,27 @@ export const RightsProvider = ({ children }) => {
 
   // Check if user has permission for a specific menu and action
   const hasPermission = useCallback((menuId, action) => {
-    if (!menuId) {
+    // During loading, return false to prevent actions
+    if (loading) {
+      console.log(`Permission check during loading - Menu: ${menuId}, Action: ${action}, Result: false`);
       return false;
     }
     
-    const rights = userRights[menuId];
+    if (!menuId) {
+      console.warn('hasPermission called without menuId');
+      return false;
+    }
+    
+    // Convert menuId to string for consistent comparison
+    const menuIdStr = String(menuId);
+    const rights = userRights[menuIdStr];
+    
     if (!rights) {
+      console.log(`No rights found for menu ${menuIdStr}, denying all permissions`);
       return false;
     }
 
+    // Map action names to database column names
     const actionMap = {
       'add': 'IsAdd',
       'create': 'IsAdd',
@@ -128,18 +155,24 @@ export const RightsProvider = ({ children }) => {
       'post': 'IsPost',
       'copy': 'IsCopy',
       'search': 'IsSearch',
+      'view': 'IsSearch',
       'upload': 'IsUpload',
       'favorite': 'Isfavorite',
       'backdate': 'IsBackDate',
-      'active': 'IsActive',
-      'view': 'IsSearch' // Using IsSearch for view permission
+      'cancel': 'IsBackDate',  // Cancel uses backdate permission
+      'active': 'IsActive'
     };
 
-    const field = actionMap[action.toLowerCase()];
-    if (!field) return false;
+    const dbColumn = actionMap[action.toLowerCase()];
+    if (!dbColumn) {
+      console.warn(`Unknown action: ${action}`);
+      return false;
+    }
 
-    return rights[field] === true;
-  }, [userRights]);
+    const hasPerm = rights[dbColumn] === true;
+    console.log(`Permission check - Menu: ${menuIdStr}, Action: ${action} -> ${dbColumn}, Result: ${hasPerm}`);
+    return hasPerm;
+  }, [userRights, loading]);
 
   const hasAnyPermission = useCallback((menuId, actions) => {
     return actions.some(action => hasPermission(menuId, action));

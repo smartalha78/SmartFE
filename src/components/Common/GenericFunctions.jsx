@@ -1,6 +1,47 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { X, Save } from "lucide-react";
 
+// ✅ Helper function for authenticated fetch with token
+const authFetch = async (url, options = {}) => {
+    const token = localStorage.getItem('authToken');
+    
+    const enhancedOptions = {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+    };
+    
+    console.log(`🌐 Fetching: ${url}`);
+    console.log(`📤 Request options:`, {
+        method: enhancedOptions.method,
+        headers: { ...enhancedOptions.headers, Authorization: token ? 'Bearer [HIDDEN]' : 'none' },
+        body: enhancedOptions.body ? JSON.parse(enhancedOptions.body) : null
+    });
+    
+    const response = await fetch(url, enhancedOptions);
+    
+    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+    
+    if (response.status === 401) {
+        console.error('❌ Unauthorized - Token may be expired');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP 401: ${errorData.message || 'Unauthorized'}`);
+    }
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ HTTP error! status: ${response.status}`, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`✅ Response data:`, data);
+    return data;
+};
+
 // ✅ Create a hook for generic functionality
 export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPerPage) => {
     const [items, setItems] = useState([]);
@@ -18,67 +59,31 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     const [searchTimeout, setSearchTimeout] = useState(null);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [showPopup, setShowPopup] = useState(false);
-    const [popupMode, setPopupMode] = useState(null); // 'new' or 'edit'
+    const [popupMode, setPopupMode] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
     const [foreignData, setForeignData] = useState({
         countries: [],
         cities: []
     });
-    const [tableHasOffcode, setTableHasOffcode] = useState(false); // Track if table has offcode field
-    const [tableColumns, setTableColumns] = useState([]); // Store table columns
-
-    // ✅ Helper to fetch JSON safely
-    const fetchJson = async (url, options = {}) => {
-        console.log(`🌐 Fetching: ${url}`);
-        console.log(`📤 Request options:`, {
-            method: options.method,
-            headers: options.headers,
-            body: options.body ? JSON.parse(options.body) : null
-        });
-
-        try {
-            const res = await fetch(url, {
-                headers: {
-                    "Content-Type": "application/json",
-                    ...options.headers
-                },
-                ...options,
-            });
-
-            console.log(`📡 Response status: ${res.status} ${res.statusText}`);
-
-            if (!res.ok) {
-                const errorText = await res.text();
-                console.error(`❌ HTTP error! status: ${res.status}`, errorText);
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-            }
-
-            const data = await res.json();
-            console.log(`✅ Response data:`, data);
-            return data;
-        } catch (err) {
-            console.error(`❌ Fetch error for ${url}:`, err);
-            throw err;
-        }
-    };
+    const [tableHasOffcode, setTableHasOffcode] = useState(false);
+    const [tableColumns, setTableColumns] = useState([]);
 
     // ✅ Get table structure to check for offcode column
     const getTableStructure = async () => {
         try {
-            const response = await fetchJson(`${API_BASE}/get-table-structure`, {
+            const response = await authFetch(`${API_BASE}/get-table-structure`, {
                 method: "POST",
                 body: JSON.stringify({
                     tableName: moduleConfig.tableName
                 }),
             });
 
-            if (response.success && response.columns) {
-                const columns = response.columns;
+            if (response.success && response.structure) {
+                const columns = response.structure;
                 setTableColumns(columns);
                 
-                // Check if offcode exists in columns
                 const hasOffcode = columns.some(col => 
-                    col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
+                    col.name && col.name.toLowerCase() === 'offcode'
                 );
                 
                 setTableHasOffcode(hasOffcode);
@@ -89,7 +94,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             return false;
         } catch (err) {
             console.error("Failed to get table structure:", err);
-            // Default to assuming offcode exists if we can't check
             setTableHasOffcode(true);
             return true;
         }
@@ -98,38 +102,16 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Fetch foreign data (countries, cities, etc.)
     const fetchForeignData = async () => {
         try {
-            const currentOffcode = credentials?.company?.offcode || '0101';
+            const currentOffcode = credentials?.offcode || '0101';
 
-            // Fetch countries if needed
             if (moduleConfig.needsCountries) {
-                // First check if country table has offcode
-                let countryHasOffcode = false;
-                try {
-                    const countryStructure = await fetchJson(`${API_BASE}/get-table-structure`, {
-                        method: "POST",
-                        body: JSON.stringify({
-                            tableName: "country"
-                        }),
-                    });
-
-                    countryHasOffcode = countryStructure.success && 
-                        countryStructure.columns.some(col => 
-                            col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
-                        );
-                } catch (err) {
-                    console.log("Could not check country table structure, assuming no offcode");
-                }
-
                 const countriesPayload = {
                     tableName: "country",
-                    usePagination: false
+                    usePagination: false,
+                    where: `IsActive = 1`
                 };
 
-                if (countryHasOffcode) {
-                    countriesPayload.where = `offcode = '${currentOffcode}'`;
-                }
-
-                const countriesData = await fetchJson(`${API_BASE}/get-table-data`, {
+                const countriesData = await authFetch(`${API_BASE}/get-table-data`, {
                     method: "POST",
                     body: JSON.stringify(countriesPayload),
                 });
@@ -144,50 +126,17 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                     );
 
                     setForeignData(prev => ({ ...prev, countries: activeCountries }));
-
-                    // Update dropdown options in moduleConfig
-                    if (moduleConfig.fields.dropdowns) {
-                        const dropdownIndex = moduleConfig.fields.dropdowns.findIndex(d => d.name === "CountryID" || d.name === "CountryCode");
-                        if (dropdownIndex !== -1) {
-                            moduleConfig.fields.dropdowns[dropdownIndex].options = activeCountries.map(country => ({
-                                value: country.CountryID,
-                                label: country.CountryName
-                            }));
-                        }
-                    }
                 }
             }
 
-            // Fetch cities if needed
             if (moduleConfig.needsCities) {
-                // First check if cities table has offcode
-                let citiesHasOffcode = false;
-                try {
-                    const citiesStructure = await fetchJson(`${API_BASE}/get-table-structure`, {
-                        method: "POST",
-                        body: JSON.stringify({
-                            tableName: "cities"
-                        }),
-                    });
-
-                    citiesHasOffcode = citiesStructure.success && 
-                        citiesStructure.columns.some(col => 
-                            col.COLUMN_NAME && col.COLUMN_NAME.toLowerCase() === 'offcode'
-                        );
-                } catch (err) {
-                    console.log("Could not check cities table structure, assuming no offcode");
-                }
-
                 const citiesPayload = {
                     tableName: "cities",
-                    usePagination: false
+                    usePagination: false,
+                    where: `IsActive = 1`
                 };
 
-                if (citiesHasOffcode) {
-                    citiesPayload.where = `offcode = '${currentOffcode}'`;
-                }
-
-                const citiesData = await fetchJson(`${API_BASE}/get-table-data`, {
+                const citiesData = await authFetch(`${API_BASE}/get-table-data`, {
                     method: "POST",
                     body: JSON.stringify(citiesPayload),
                 });
@@ -202,17 +151,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                     );
 
                     setForeignData(prev => ({ ...prev, cities: activeCities }));
-
-                    // Update dropdown options in moduleConfig for city dropdowns
-                    if (moduleConfig.fields.dropdowns) {
-                        const dropdownIndex = moduleConfig.fields.dropdowns.findIndex(d => d.name === "CityCode");
-                        if (dropdownIndex !== -1) {
-                            moduleConfig.fields.dropdowns[dropdownIndex].options = activeCities.map(city => ({
-                                value: city.CityID,
-                                label: city.CityName
-                            }));
-                        }
-                    }
                 }
             }
         } catch (err) {
@@ -234,14 +172,12 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Build WHERE clause for filters
     const buildWhereClause = () => {
         let conditions = [];
-        const currentOffcode = credentials?.company?.offcode || '0101';
+        const currentOffcode = credentials?.offcode || '0101';
 
-        // Add offcode condition if the table has offcode field
         if (tableHasOffcode) {
             conditions.push(`offcode = '${currentOffcode}'`);
         }
 
-        // Add search condition
         if (searchTerm && searchTerm.trim() !== "") {
             const searchFields = moduleConfig.fields.basic || [];
             const searchConditions = searchFields.map(field => 
@@ -252,9 +188,7 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             }
         }
 
-        // Add active filter
         if (moduleConfig.fields.hasActiveFilter && activeFilter !== "all") {
-            // Find the active field name (usually IsActive, isActive, Isactive, etc.)
             const activeField = moduleConfig.fields.checkboxes?.find(f => 
                 f.toLowerCase().includes('active')
             ) || "IsActive";
@@ -263,7 +197,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             conditions.push(`${activeField} = ${isActive ? 1 : 0}`);
         }
 
-        // Add custom filter (like codetype for reason module)
         if (moduleConfig.fields.hasCustomFilter && customFilter !== "all") {
             conditions.push(`codetype = '${customFilter}'`);
         }
@@ -275,8 +208,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     const fetchItems = useCallback(async (page = 1, perPage = itemsPerPage) => {
         try {
             setLoading(true);
-            const currentOffcode = credentials?.company?.offcode || '0101';
-
             const whereClause = buildWhereClause();
 
             const payload = {
@@ -286,13 +217,12 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                 usePagination: true
             };
 
-            // Add where clause if not empty
             if (whereClause) {
                 payload.where = whereClause;
             }
 
-            // Add company offcode to companyData if table has offcode
             if (tableHasOffcode) {
+                const currentOffcode = credentials?.offcode || '0101';
                 payload.companyData = {
                     company: {
                         offcode: currentOffcode
@@ -302,18 +232,9 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
 
             console.log("📤 Sending to get-table-data:", payload);
 
-            const data = await fetchJson(`${API_BASE}/get-table-data`, {
+            const data = await authFetch(`${API_BASE}/get-table-data`, {
                 method: "POST",
                 body: JSON.stringify(payload),
-            });
-
-            console.log("📥 Response from get-table-data:", {
-                success: data.success,
-                rowsCount: data.rows?.length || 0,
-                totalCount: data.totalCount,
-                page: data.page,
-                totalPages: data.totalPages,
-                offcodeApplied: data.offcodeApplied
             });
 
             if (data.success && data.rows) {
@@ -349,20 +270,17 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             setLoading(false);
         }
     }, [moduleConfig.tableName, moduleConfig.fields, searchTerm, activeFilter, customFilter, 
-        credentials?.company?.offcode, itemsPerPage, API_BASE, isInitialLoad, tableHasOffcode]);
+        credentials?.offcode, itemsPerPage, API_BASE, isInitialLoad, tableHasOffcode]);
 
     // ✅ Initial data fetch
     useEffect(() => {
         const initialize = async () => {
-            // Get table structure first
             await getTableStructure();
             
-            // Fetch supporting data
             if (moduleConfig.needsCountries || moduleConfig.needsCities) {
                 await fetchForeignData();
             }
 
-            // Initial data fetch
             await fetchItems(1, itemsPerPage);
         };
 
@@ -374,12 +292,10 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         const value = e.target.value;
         setSearchTerm(value);
 
-        // Clear previous timeout
         if (searchTimeout) {
             clearTimeout(searchTimeout);
         }
 
-        // Set new timeout for debouncing
         const timeout = setTimeout(() => {
             setCurrentPage(1);
             fetchItems(1, itemsPerPage);
@@ -412,19 +328,18 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Helper to get next available code
     const fetchNextCodeFromServer = async () => {
         const codeField = moduleConfig.fields.basic?.[0] || "Code";
-        const currentOffcode = credentials?.company?.offcode || '0101';
+        const currentOffcode = credentials?.offcode || '0101';
 
         const payload = {
             tableName: moduleConfig.tableName,
             usePagination: false
         };
 
-        // Add offcode condition if the table has offcode field
         if (tableHasOffcode) {
             payload.where = `offcode = '${currentOffcode}'`;
         }
 
-        const data = await fetchJson(`${API_BASE}/get-table-data`, {
+        const data = await authFetch(`${API_BASE}/get-table-data`, {
             method: "POST",
             body: JSON.stringify(payload),
         });
@@ -436,7 +351,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         const codes = data.rows
             .map(item => {
                 const val = item[codeField];
-                // Handle different formats
                 if (typeof val === 'number') return val;
                 if (typeof val === 'string') return parseInt(val, 10);
                 return NaN;
@@ -452,29 +366,25 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     // ✅ Handle new record
     const handleNew = async () => {
         const nextCode = await fetchNextCodeFromServer();
-        const currentOffcode = credentials?.company?.offcode || '0101';
+        const currentOffcode = credentials?.offcode || '0101';
 
         const newFormData = {
             [moduleConfig.fields.basic?.[0]]: nextCode
         };
 
-        // CRITICAL FIX: ALWAYS add offcode if the table has it
         if (tableHasOffcode) {
             newFormData.offcode = currentOffcode;
             console.log(`✅ Adding offcode ${currentOffcode} to new record for table ${moduleConfig.tableName}`);
         }
 
-        // Add fixed fields from config
         if (moduleConfig.fields.fixed) {
             moduleConfig.fields.fixed.forEach(field => {
-                // Don't override offcode if we already set it
                 if (field.name.toLowerCase() !== 'offcode' || !newFormData.offcode) {
                     newFormData[field.name] = field.value;
                 }
             });
         }
 
-        // Initialize checkbox fields
         if (moduleConfig.fields.checkboxes) {
             moduleConfig.fields.checkboxes.forEach(field => {
                 if (newFormData[field] === undefined) {
@@ -483,7 +393,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             });
         }
 
-        // Initialize text fields if needed
         if (moduleConfig.fields.texts) {
             moduleConfig.fields.texts.forEach(field => {
                 if (newFormData[field] === undefined) {
@@ -492,7 +401,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             });
         }
 
-        // Initialize number fields if needed
         if (moduleConfig.fields.numbers) {
             moduleConfig.fields.numbers.forEach(field => {
                 if (newFormData[field] === undefined) {
@@ -501,7 +409,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             });
         }
 
-        // Initialize dropdown fields if needed
         if (moduleConfig.fields.dropdowns) {
             moduleConfig.fields.dropdowns.forEach(field => {
                 if (newFormData[field.name] === undefined) {
@@ -522,14 +429,9 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         const formattedItem = {};
         const excludeFields = ['rn', '__rowNum__', 'rowIndex', 'key'];
 
-        // Format item for form
         Object.keys(item).forEach(key => {
-            // Skip non-database fields
-            if (excludeFields.includes(key)) {
-                return;
-            }
+            if (excludeFields.includes(key)) return;
 
-            // Handle boolean/active fields
             if (moduleConfig.fields.checkboxes?.includes(key)) {
                 formattedItem[key] = isActiveValue(item[key]);
             } else {
@@ -553,14 +455,12 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         setError(null);
     };
 
-    // ✅ Save using UPSERT endpoint
+    // ✅ Save using UPSERT endpoint with authentication
     const handleSave = async (formData) => {
         try {
-            // Clear any previous messages
             setError(null);
             setSuccessMessage(null);
 
-            // Validation
             const requiredFields = moduleConfig.fields.basic || [];
             for (const field of requiredFields) {
                 if (!formData[field]?.toString().trim()) {
@@ -573,35 +473,27 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             const payloadData = {};
             const primaryKeyField = moduleConfig.fields.basic?.[0];
 
-            // Build payload data - include ALL fields from formData
             Object.keys(formData).forEach(key => {
-                // Handle number fields
                 if (moduleConfig.fields.numbers?.includes(key)) {
-                    const numValue = parseInt(formData[key] || "0", 10);
+                    const numValue = parseFloat(formData[key] || "0");
                     payloadData[key] = isNaN(numValue) ? 0 : numValue;
                 }
-                // Handle checkbox/boolean fields - convert to 1/0 for SQL Server
                 else if (moduleConfig.fields.checkboxes?.includes(key)) {
                     payloadData[key] = isActiveValue(formData[key]) ? 1 : 0;
                 }
-                // Handle other fields
                 else {
                     payloadData[key] = formData[key] !== null && formData[key] !== undefined ? formData[key] : "";
                 }
             });
 
-            // CRITICAL FIX: ALWAYS add offcode if table has it
             if (tableHasOffcode) {
-                const currentOffcode = credentials?.company?.offcode || '0101';
-                
-                // Check if offcode is already in payloadData
+                const currentOffcode = credentials?.offcode || '0101';
                 if (!payloadData.offcode || payloadData.offcode === "") {
                     payloadData.offcode = currentOffcode;
                     console.log(`✅ Adding offcode ${currentOffcode} to save payload for table ${moduleConfig.tableName}`);
                 }
             }
 
-            // Debug log
             console.log("📤 Save Request Details:", {
                 mode: popupMode,
                 table: moduleConfig.tableName,
@@ -611,9 +503,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
                 payloadData: payloadData
             });
 
-            // Use UPSERT endpoint for both insert and update
-            const url = `${API_BASE}/table/upsert`;
-            
             const payload = {
                 tableName: moduleConfig.tableName,
                 data: payloadData
@@ -621,7 +510,7 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
 
             console.log("📤 UPSERT Payload:", payload);
 
-            const res = await fetchJson(url, {
+            const res = await authFetch(`${API_BASE}/table/upsert`, {
                 method: "POST",
                 body: JSON.stringify(payload),
             });
@@ -629,19 +518,13 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
             console.log("📥 API Response:", res);
 
             if (res.success) {
-                // Set success message
                 const action = res.operation === 'update' ? 'updated' : 'created';
                 const itemName = formData[moduleConfig.fields.basic?.[1] || primaryKeyField] || 'Item';
                 const message = `${moduleConfig.formTitle} "${itemName}" ${action} successfully!`;
                 setSuccessMessage(message);
 
-                // Auto-close success message after 3 seconds
                 setTimeout(() => setSuccessMessage(null), 3000);
-
-                // Close popup
                 handleClosePopup();
-
-                // Refresh data
                 await fetchItems(currentPage, itemsPerPage);
 
                 return true;
@@ -661,7 +544,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
     };
 
     return {
-        // State
         items,
         filteredItems,
         paginatedItems,
@@ -681,7 +563,6 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         foreignData,
         tableHasOffcode,
         tableColumns,
-        // Functions
         fetchItems,
         handleSearchChange,
         handleActiveFilterChange,
@@ -693,13 +574,12 @@ export const useGenericFunctions = (moduleConfig, API_BASE, credentials, itemsPe
         handleSave,
         fetchForeignData,
         isActiveValue,
-        // Setters
         setError,
         setSuccessMessage,
     };
 };
 
-// ✅ Export configuration function
+// ✅ Export configuration function (keep your existing configs)
 export const getDefaultConfig = (type) => {
     const configs = {
         benefit: {
@@ -1132,19 +1012,16 @@ export const GenericFormPopup = ({
     const [localError, setLocalError] = useState(null);
     const [isVisible, setIsVisible] = useState(false);
 
-    // ✅ Initialize form data
     useEffect(() => {
         const initializeFormData = () => {
             const initialData = {};
 
-            // Start with selected item data
             if (selectedItem) {
                 Object.keys(selectedItem).forEach(key => {
                     initialData[key] = selectedItem[key];
                 });
             }
 
-            // Add missing fields based on configuration
             if (moduleConfig.fields.basic) {
                 moduleConfig.fields.basic.forEach(field => {
                     if (initialData[field] === undefined) {
@@ -1153,7 +1030,6 @@ export const GenericFormPopup = ({
                 });
             }
 
-            // Add checkbox fields
             if (moduleConfig.fields.checkboxes) {
                 moduleConfig.fields.checkboxes.forEach(field => {
                     if (initialData[field] === undefined) {
@@ -1162,7 +1038,6 @@ export const GenericFormPopup = ({
                 });
             }
 
-            // Add number fields
             if (moduleConfig.fields.numbers) {
                 moduleConfig.fields.numbers.forEach(field => {
                     if (initialData[field] === undefined) {
@@ -1171,7 +1046,6 @@ export const GenericFormPopup = ({
                 });
             }
 
-            // Add text fields
             if (moduleConfig.fields.texts) {
                 moduleConfig.fields.texts.forEach(field => {
                     if (initialData[field] === undefined) {
@@ -1180,14 +1054,12 @@ export const GenericFormPopup = ({
                 });
             }
 
-            // Add fixed fields
             if (moduleConfig.fields.fixed) {
                 moduleConfig.fields.fixed.forEach(field => {
                     initialData[field.name] = field.value;
                 });
             }
 
-            // Add dropdown fields
             if (moduleConfig.fields.dropdowns) {
                 moduleConfig.fields.dropdowns.forEach(field => {
                     if (initialData[field.name] === undefined) {
@@ -1202,13 +1074,11 @@ export const GenericFormPopup = ({
 
         setFormData(initializeFormData());
 
-        // Show popup after a small delay for animation
         if (popupMode) {
             setTimeout(() => setIsVisible(true), 50);
         }
     }, [selectedItem, moduleConfig, popupMode]);
 
-    // ✅ Input handler
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData((prev) => ({
@@ -1218,7 +1088,6 @@ export const GenericFormPopup = ({
         setLocalError(null);
     };
 
-    // ✅ Handle save
     const handleSaveClick = async () => {
         const success = await onSave(formData);
         if (success) {
@@ -1229,7 +1098,6 @@ export const GenericFormPopup = ({
         }
     };
 
-    // ✅ Handle close with animation
     const handleClose = () => {
         setIsVisible(false);
         setTimeout(() => {
@@ -1237,7 +1105,6 @@ export const GenericFormPopup = ({
         }, 300);
     };
 
-    // ✅ Render form field based on type
     const renderFormField = (fieldName) => {
         const fieldConfig = {
             name: fieldName,
@@ -1247,290 +1114,163 @@ export const GenericFormPopup = ({
             placeholder: `Enter ${fieldName}`
         };
 
-        // Check if field is in fixed config
         const fixedField = moduleConfig.fields.fixed?.find(f => f.name === fieldName);
         if (fixedField) {
             return (
                 <div className="form-group" key={fieldName}>
                     <label>{fieldName} <span className="optional">(Fixed)</span></label>
-                    <input
-                        {...fieldConfig}
-                        value={fixedField.value}
-                        disabled={true}
-                        className="modern-input disabled-input"
-                    />
+                    <input {...fieldConfig} value={fixedField.value} disabled={true} className="modern-input disabled-input" />
                 </div>
             );
         }
 
-        // Auto-generated code field (disabled for new items)
         const isPrimaryCodeField = fieldName === moduleConfig.fields.basic?.[0];
         if (isPrimaryCodeField && popupMode === 'new') {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">{fieldName}</label>
-                    <input
-                        type="text"
-                        {...fieldConfig}
-                        disabled={true}
-                        className="modern-input disabled-input"
-                    />
+                    <input type="text" {...fieldConfig} disabled={true} className="modern-input disabled-input" />
                     <small className="form-hint">Auto-generated code</small>
                 </div>
             );
         }
 
-        // Check if field is CountryID dropdown for city module
         if (fieldName === "CountryID" && moduleType === "city") {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">Country</label>
-                    <select 
-                        name={fieldName}
-                        value={formData[fieldName] || ""}
-                        onChange={handleInputChange}
-                        className="modern-input"
-                    >
+                    <select name={fieldName} value={formData[fieldName] || ""} onChange={handleInputChange} className="modern-input">
                         <option value="">Select Country</option>
-                        {countries.length > 0 ? (
-                            countries.map(country => (
-                                <option key={country.CountryID} value={country.CountryID}>
-                                    {country.CountryName}
-                                </option>
-                            ))
-                        ) : (
-                            <option value="" disabled>Loading countries...</option>
-                        )}
+                        {countries.length > 0 ? countries.map(country => (
+                            <option key={country.CountryID} value={country.CountryID}>{country.CountryName}</option>
+                        )) : <option value="" disabled>Loading countries...</option>}
                     </select>
                 </div>
             );
         }
 
-        // Check if field is CountryCode dropdown for bank module
         if (fieldName === "CountryCode" && moduleType === "bank") {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">Country</label>
-                    <select 
-                        name={fieldName}
-                        value={formData[fieldName] || ""}
-                        onChange={handleInputChange}
-                        className="modern-input"
-                    >
+                    <select name={fieldName} value={formData[fieldName] || ""} onChange={handleInputChange} className="modern-input">
                         <option value="">Select Country</option>
-                        {countries.length > 0 ? (
-                            countries.map(country => (
-                                <option key={country.CountryID} value={country.CountryID}>
-                                    {country.CountryName}
-                                </option>
-                            ))
-                        ) : (
-                            <option value="" disabled>Loading countries...</option>
-                        )}
+                        {countries.length > 0 ? countries.map(country => (
+                            <option key={country.CountryID} value={country.CountryID}>{country.CountryName}</option>
+                        )) : <option value="" disabled>Loading countries...</option>}
                     </select>
                 </div>
             );
         }
 
-        // Check if field is CityCode dropdown for bank module
         if (fieldName === "CityCode" && moduleType === "bank") {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">City</label>
-                    <select 
-                        name={fieldName}
-                        value={formData[fieldName] || ""}
-                        onChange={handleInputChange}
-                        className="modern-input"
-                    >
+                    <select name={fieldName} value={formData[fieldName] || ""} onChange={handleInputChange} className="modern-input">
                         <option value="">Select City</option>
-                        {cities.length > 0 ? (
-                            cities.map(city => (
-                                <option key={city.CityID} value={city.CityID}>
-                                    {city.CityName}
-                                </option>
-                            ))
-                        ) : (
-                            <option value="" disabled>Loading cities...</option>
-                        )}
+                        {cities.length > 0 ? cities.map(city => (
+                            <option key={city.CityID} value={city.CityID}>{city.CityName}</option>
+                        )) : <option value="" disabled>Loading cities...</option>}
                     </select>
                 </div>
             );
         }
 
-        // Check if field is in dropdowns config
         const dropdownField = moduleConfig.fields.dropdowns?.find(f => f.name === fieldName);
         if (dropdownField) {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">{fieldName}</label>
-                    <select 
-                        name={fieldName}
-                        value={formData[fieldName] || ""}
-                        onChange={handleInputChange}
-                        className="modern-input"
-                    >
+                    <select name={fieldName} value={formData[fieldName] || ""} onChange={handleInputChange} className="modern-input">
                         <option value="">Select {fieldName}</option>
                         {dropdownField.options.map(option => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
+                            <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                     </select>
                 </div>
             );
         }
 
-        // Check if field is a checkbox
         if (moduleConfig.fields.checkboxes?.includes(fieldName)) {
             return (
                 <div className="com-checkbox-container" key={fieldName}>
                     <label className="com-checkbox-label">
-                        <input
-                            type="checkbox"
-                            name={fieldName}
-                            checked={formData[fieldName] === true || formData[fieldName] === 1 || formData[fieldName] === "1"}
-                            onChange={handleInputChange}
-                            className="com-checkbox"
-                        />
+                        <input type="checkbox" name={fieldName} checked={formData[fieldName] === true || formData[fieldName] === 1 || formData[fieldName] === "1"} onChange={handleInputChange} className="com-checkbox" />
                         <span className="com-active">{fieldName}</span>
                     </label>
                 </div>
             );
         }
 
-        // Check if field is a number
         if (moduleConfig.fields.numbers?.includes(fieldName)) {
             return (
                 <div className="form-group" key={fieldName}>
                     <label>{fieldName}</label>
-                    <input
-                        type="number"
-                        {...fieldConfig}
-                    />
+                    <input type="number" {...fieldConfig} />
                 </div>
             );
         }
 
-        // Check if field is a textarea
         if (fieldName === "Address") {
             return (
                 <div className="form-group full-width" key={fieldName}>
                     <label>{fieldName}</label>
-                    <textarea
-                        {...fieldConfig}
-                        rows="3"
-                        className="modern-input"
-                    />
+                    <textarea {...fieldConfig} rows="3" className="modern-input" />
                 </div>
             );
         }
 
-        // Primary code field in edit mode (read-only)
         if (isPrimaryCodeField && popupMode === 'edit') {
             return (
                 <div className="form-group" key={fieldName}>
                     <label className="required">{fieldName} <span className="read-only-indicator">(Read-only)</span></label>
-                    <input
-                        type="text"
-                        {...fieldConfig}
-                        disabled={true}
-                        className="modern-input disabled-input"
-                    />
+                    <input type="text" {...fieldConfig} disabled={true} className="modern-input disabled-input" />
                 </div>
             );
         }
 
-        // Regular text field
         return (
             <div className="form-group" key={fieldName}>
                 <label className="required">{fieldName}</label>
-                <input
-                    type="text"
-                    {...fieldConfig}
-                    className="modern-input"
-                />
+                <input type="text" {...fieldConfig} className="modern-input" />
             </div>
         );
     };
 
-    // Don't render if no popup mode
     if (!popupMode) return null;
 
     return (
         <>
-            {/* Backdrop overlay */}
-            <div
-                className={`popup-backdrop ${isVisible ? 'visible' : ''}`}
-                onClick={handleClose}
-            ></div>
-
-            {/* Popup container */}
+            <div className={`popup-backdrop ${isVisible ? 'visible' : ''}`} onClick={handleClose}></div>
             <div className={`popup-container ${isVisible ? 'visible' : ''}`}>
                 <div className="popup-content">
                     <div className="com-popup-header">
-                        <h3>
-                            {popupMode === 'edit'
-                                ? `Edit ${moduleConfig.formTitle}`
-                                : `Add New ${moduleConfig.formTitle}`
-                            }
-                        </h3>
-                        <button className="popup-close-btn" onClick={handleClose}>
-                            <X size={20} />
-                        </button>
+                        <h3>{popupMode === 'edit' ? `Edit ${moduleConfig.formTitle}` : `Add New ${moduleConfig.formTitle}`}</h3>
+                        <button className="popup-close-btn" onClick={handleClose}><X size={20} /></button>
                     </div>
-
                     <div className="com-popup-body">
                         {localError && <div className="error-message">{localError}</div>}
-
-                        <div className="com-form-row">
-                            {/* Basic fields */}
-                            {moduleConfig.fields.basic?.map(field => renderFormField(field))}
-                        </div>
-
-                        {/* Additional text fields */}
+                        <div className="com-form-row">{moduleConfig.fields.basic?.map(field => renderFormField(field))}</div>
                         {moduleConfig.fields.texts && moduleConfig.fields.texts.length > 0 && (
-                            <div className="com-form-row">
-                                {moduleConfig.fields.texts.map(field => renderFormField(field))}
-                            </div>
+                            <div className="com-form-row">{moduleConfig.fields.texts.map(field => renderFormField(field))}</div>
                         )}
-
-                        {/* Number fields */}
                         {moduleConfig.fields.numbers && moduleConfig.fields.numbers.length > 0 && (
-                            <div className="com-form-row">
-                                {moduleConfig.fields.numbers.map(field => renderFormField(field))}
-                            </div>
+                            <div className="com-form-row">{moduleConfig.fields.numbers.map(field => renderFormField(field))}</div>
                         )}
-
-                        {/* Dropdown fields */}
                         {moduleConfig.fields.dropdowns && moduleConfig.fields.dropdowns.length > 0 && (
-                            <div className="com-form-row">
-                                {moduleConfig.fields.dropdowns.map(field => renderFormField(field.name))}
-                            </div>
+                            <div className="com-form-row">{moduleConfig.fields.dropdowns.map(field => renderFormField(field.name))}</div>
                         )}
-
-                        {/* Fixed fields */}
                         {moduleConfig.fields.fixed && moduleConfig.fields.fixed.length > 0 && (
-                            <div className="form-row">
-                                {moduleConfig.fields.fixed.map(field => renderFormField(field.name))}
-                            </div>
+                            <div className="form-row">{moduleConfig.fields.fixed.map(field => renderFormField(field.name))}</div>
                         )}
-
-                        {/* Checkbox fields */}
                         {moduleConfig.fields.checkboxes && moduleConfig.fields.checkboxes.length > 0 && (
-                            <div className="form-row checkbox-row">
-                                {moduleConfig.fields.checkboxes.map(field => renderFormField(field))}
-                            </div>
+                            <div className="form-row checkbox-row">{moduleConfig.fields.checkboxes.map(field => renderFormField(field))}</div>
                         )}
                     </div>
-
                     <div className="com-popup-footer">
-                        <button className="com-btn-save" onClick={handleSaveClick}>
-                            <Save size={16} /> {popupMode === 'edit' ? "Update" : "Save"}
-                        </button>
-                        <button className="com-btn-cancel" onClick={handleClose}>
-                            <X size={16} /> Cancel
-                        </button>
+                        <button className="com-btn-save" onClick={handleSaveClick}><Save size={16} /> {popupMode === 'edit' ? "Update" : "Save"}</button>
+                        <button className="com-btn-cancel" onClick={handleClose}><X size={16} /> Cancel</button>
                     </div>
                 </div>
             </div>

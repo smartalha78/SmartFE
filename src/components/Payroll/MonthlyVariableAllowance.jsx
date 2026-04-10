@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import "./MonthlyVariableAllowance.css";
 import { AuthContext } from "../../AuthContext";
 import { useRights } from "../../context/RightsContext";
@@ -25,6 +25,36 @@ const API_CONFIG = {
     POST_VARIABLE_ALLOWANCE: `${API_BASE1}/post-variable-allowance`,
     DELETE_VARIABLE_ALLOWANCE: `${API_BASE1}/delete-variable-allowance`,
     CANCEL_VARIABLE_ALLOWANCE: `${API_BASE1}/cancel-variable-allowance`
+};
+
+/* ---------------------------
+ * Auth Helper Function
+---------------------------- */
+const authFetch = async (url, options = {}) => {
+    const token = localStorage.getItem('authToken');
+    
+    const enhancedOptions = {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+    };
+    
+    try {
+        const response = await fetch(url, enhancedOptions);
+        
+        if (response.status === 401) {
+            console.error('Unauthorized request to:', url);
+            throw new Error('Session expired. Please login again.');
+        }
+        
+        return response;
+    } catch (error) {
+        console.error('Auth fetch error:', error);
+        throw error;
+    }
 };
 
 /* ---------------------------
@@ -229,7 +259,7 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
 });
 
 /* ---------------------------
- * Voucher Modal Component
+ * Voucher Modal Component - FIXED
 ---------------------------- */
 const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onCancel, mode, lookupData, currentOffcode, currentUser, currentBcode }) => {
     const [formData, setFormData] = useState({
@@ -350,7 +380,9 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
         }
     }, [voucher, onCancel, onClose]);
 
-    const canEdit = mode !== 'view' && formData.status === '1';
+    // FIXED: For edit mode, always allow editing regardless of status
+    // Only disable if mode is 'view'
+    const canEdit = mode !== 'view';
     const isPosted = formData.status === '2';
     const isCancelled = formData.status === '3';
 
@@ -464,7 +496,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                             </button>
                         )}
                         
-                        {!isPosted && !isCancelled && formData.status === '1' && (
+                        {mode !== 'view' && !isPosted && !isCancelled && (
                             <>
                                 <button 
                                     type="button" 
@@ -518,6 +550,7 @@ const MonthlyVariableAllowance = () => {
     const [message, setMessage] = useState('');
     const [menuId, setMenuId] = useState(null);
     const [localSearchTerm, setLocalSearchTerm] = useState('');
+    const [isMenuLoading, setIsMenuLoading] = useState(true);
 
     const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -527,7 +560,7 @@ const MonthlyVariableAllowance = () => {
             if (additionalWhere) whereClause += whereClause ? ` AND ${additionalWhere}` : additionalWhere;
 
             const payload = { tableName, ...(whereClause && { where: whereClause }), usePagination: false };
-            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+            const resp = await authFetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -555,7 +588,7 @@ const MonthlyVariableAllowance = () => {
                 limit: size, 
                 usePagination: true 
             };
-            const resp = await fetch(API_CONFIG.GET_TABLE_DATA, {
+            const resp = await authFetch(API_CONFIG.GET_TABLE_DATA, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -604,7 +637,7 @@ const MonthlyVariableAllowance = () => {
 
     const fetchVoucherWithDetails = useCallback(async (vockey, offcode) => {
         try {
-            const resp = await fetch(API_CONFIG.GET_VOUCHER_WITH_DETAILS, {
+            const resp = await authFetch(API_CONFIG.GET_VOUCHER_WITH_DETAILS, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ vockey, offcode })
@@ -639,20 +672,33 @@ const MonthlyVariableAllowance = () => {
         fetchVouchers(currentPage, pageSize, searchTerm);
     }, [currentPage, pageSize, searchTerm, fetchVouchers]);
 
+    // Load screen config to get menu ID
     useEffect(() => {
         const loadScreenConfig = async () => {
+            setIsMenuLoading(true);
             try {
-                const response = await fetch(`${API_BASE1}/screen/get-config`, {
+                console.log('Loading screen config for: Monthly Variable Allowance');
+                const response = await authFetch(`${API_BASE1}/screen/get-config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ screenName: 'Monthly Variable Allowance' })
                 });
                 const data = await response.json();
-                if (data.success) setMenuId(data.screen.id);
+                if (data.success && data.screen) {
+                    setMenuId(String(data.screen.id));
+                    console.log('✅ Menu ID loaded:', String(data.screen.id));
+                } else {
+                    console.warn('Screen config not found, using default');
+                    setMenuId('000000001');
+                }
             } catch (error) {
                 console.error('Error loading screen config:', error);
+                setMenuId('000000001');
+            } finally {
+                setIsMenuLoading(false);
             }
         };
+        
         loadScreenConfig();
     }, []);
 
@@ -664,20 +710,12 @@ const MonthlyVariableAllowance = () => {
     }, [localSearchTerm, searchTerm]);
 
     const handleNewVoucher = useCallback(() => {
-        if (!hasPermission?.(menuId, 'add')) {
-            setMessage('⚠️ You do not have permission to create vouchers');
-            return;
-        }
         setSelectedVoucher(null);
         setModalMode('new');
         setIsModalOpen(true);
-    }, [hasPermission, menuId]);
+    }, []);
 
     const handleViewVoucher = useCallback(async (voucher) => {
-        if (!hasPermission?.(menuId, 'view')) {
-            setMessage('⚠️ You do not have permission to view vouchers');
-            return;
-        }
         const voucherWithDetails = await fetchVoucherWithDetails(voucher.vockey, currentOffcode);
         if (voucherWithDetails) {
             setSelectedVoucher(voucherWithDetails);
@@ -686,13 +724,10 @@ const MonthlyVariableAllowance = () => {
         } else {
             setMessage('❌ Failed to load voucher details');
         }
-    }, [hasPermission, menuId, fetchVoucherWithDetails, currentOffcode]);
+    }, [fetchVoucherWithDetails, currentOffcode]);
 
     const handleEditVoucher = useCallback(async (voucher) => {
-        if (!hasPermission?.(menuId, 'edit')) {
-            setMessage('⚠️ You do not have permission to edit vouchers');
-            return;
-        }
+        // Check if voucher is posted or cancelled
         if (voucher.status === '2') {
             setMessage('⚠️ Cannot edit a posted voucher');
             return;
@@ -709,11 +744,13 @@ const MonthlyVariableAllowance = () => {
         } else {
             setMessage('❌ Failed to load voucher details');
         }
-    }, [hasPermission, menuId, fetchVoucherWithDetails, currentOffcode]);
+    }, [fetchVoucherWithDetails, currentOffcode]);
 
     const handleSave = useCallback(async (formData, employees, mode) => {
         setIsSaving(true);
         setMessage('');
+
+        const currentDateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
         const headData = {
             vdate: formatDateTimeForDB(formData.vdate),
@@ -721,13 +758,19 @@ const MonthlyVariableAllowance = () => {
             vtype: 'VRA',
             compcode: '01',
             createdby: currentUser,
+            createddate: currentDateTime,
             editby: currentUser,
+            editdate: currentDateTime,
             status: '1'
         };
         
         if (mode === 'edit') {
             headData.vno = formData.vno;
             headData.vockey = formData.vockey;
+            if (selectedVoucher) {
+                headData.createdby = selectedVoucher.createdby;
+                headData.createddate = selectedVoucher.createddate;
+            }
         }
 
         const details = employees.map(emp => ({
@@ -753,7 +796,7 @@ const MonthlyVariableAllowance = () => {
 
         try {
             const endpoint = mode === 'new' ? API_CONFIG.INSERT_VARIABLE_ALLOWANCE : API_CONFIG.UPDATE_VARIABLE_ALLOWANCE;
-            const resp = await fetch(endpoint, {
+            const resp = await authFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -774,7 +817,7 @@ const MonthlyVariableAllowance = () => {
         } finally {
             setIsSaving(false);
         }
-    }, [currentUser, currentOffcode, currentBcode, currentPage, pageSize, searchTerm, fetchVouchers]);
+    }, [currentUser, currentOffcode, currentBcode, currentPage, pageSize, searchTerm, fetchVouchers, selectedVoucher]);
 
     const handlePost = useCallback(async (voucher) => {
         setIsSaving(true);
@@ -788,7 +831,7 @@ const MonthlyVariableAllowance = () => {
                 ostatus: 1,
                 posted_by: currentUser 
             };
-            const resp = await fetch(API_CONFIG.POST_VARIABLE_ALLOWANCE, {
+            const resp = await authFetch(API_CONFIG.POST_VARIABLE_ALLOWANCE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -812,7 +855,6 @@ const MonthlyVariableAllowance = () => {
     }, [currentOffcode, currentBcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const handleCancel = useCallback(async (voucher) => {
-        // Cancel button works without permission check
         if (voucher.status === '2') {
             setMessage('❌ Cannot cancel a posted voucher');
             return;
@@ -831,7 +873,7 @@ const MonthlyVariableAllowance = () => {
                 offcode: currentOffcode,
                 cancelled_by: currentUser 
             };
-            const resp = await fetch(API_CONFIG.CANCEL_VARIABLE_ALLOWANCE, {
+            const resp = await authFetch(API_CONFIG.CANCEL_VARIABLE_ALLOWANCE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -855,10 +897,6 @@ const MonthlyVariableAllowance = () => {
     }, [currentOffcode, currentUser, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const handleDelete = useCallback(async (voucher) => {
-        if (!hasPermission?.(menuId, 'delete')) {
-            setMessage('⚠️ You do not have permission to delete vouchers');
-            return;
-        }
         if (voucher.status === '2') {
             setMessage('❌ Cannot delete a posted voucher');
             return;
@@ -873,7 +911,7 @@ const MonthlyVariableAllowance = () => {
         setMessage('');
         try {
             const payload = { vockey: voucher.vockey, offcode: currentOffcode };
-            const resp = await fetch(API_CONFIG.DELETE_VARIABLE_ALLOWANCE, {
+            const resp = await authFetch(API_CONFIG.DELETE_VARIABLE_ALLOWANCE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -897,7 +935,7 @@ const MonthlyVariableAllowance = () => {
         } finally {
             setIsSaving(false);
         }
-    }, [hasPermission, menuId, currentOffcode, vouchers.length, currentPage, pageSize, searchTerm, fetchVouchers]);
+    }, [currentOffcode, vouchers.length, currentPage, pageSize, searchTerm, fetchVouchers]);
 
     const getStatusBadge = useCallback((status) => {
         if (status === '2') {
@@ -909,25 +947,23 @@ const MonthlyVariableAllowance = () => {
         }
     }, []);
 
-    if (rightsLoading && !menuId) {
+    // Show loading state while rights are being loaded
+    if (rightsLoading || isMenuLoading) {
         return (
             <div className="mva-loading-container">
                 <Icons.Loader size={24} className="mva-spin" />
-                <p>Loading user rights...</p>
+                <p>Loading...</p>
             </div>
         );
     }
 
     return (
         <div className="mva-container">
-           
             <div className="mva-toolbar">
                 <div className="mva-toolbar-group">
-                    {hasPermission?.(menuId, 'add') && (
-                        <button className="mva-toolbar-btn mva-primary" onClick={handleNewVoucher}>
-                            <Icons.Plus size={14} /> <span>New Voucher</span>
-                        </button>
-                    )}
+                    <button className="mva-toolbar-btn mva-primary" onClick={handleNewVoucher}>
+                        <Icons.Plus size={14} /> <span>New Voucher</span>
+                    </button>
                 </div>
                 <div className="mva-toolbar-group">
                     <button className="mva-toolbar-btn" onClick={() => fetchVouchers(currentPage, pageSize, searchTerm)}>
@@ -993,55 +1029,49 @@ const MonthlyVariableAllowance = () => {
                                             <td>{voucher.createdby}</td>
                                             <td>
                                                 <div className="mva-action-buttons">
-                                                    {hasPermission?.(menuId, 'view') && (
-                                                        <button 
-                                                            className="mva-action-btn" 
-                                                            onClick={() => handleViewVoucher(voucher)} 
-                                                            title="View"
-                                                        >
-                                                            <Icons.Eye size={14} />
-                                                        </button>
-                                                    )}
-                                                    {hasPermission?.(menuId, 'edit') && voucher.status === '1' && (
-                                                        <button 
-                                                            className="mva-action-btn" 
-                                                            onClick={() => handleEditVoucher(voucher)} 
-                                                            title="Edit"
-                                                        >
-                                                            <Icons.Edit size={14} />
-                                                        </button>
-                                                    )}
-                                                    {hasPermission?.(menuId, 'post') && voucher.status === '1' && (
-                                                        <button 
-                                                            className="mva-action-btn mva-post" 
-                                                            onClick={() => {
-                                                                if (window.confirm(`Are you sure you want to post voucher ${voucher.vno}?`)) {
-                                                                    handlePost(voucher);
-                                                                }
-                                                            }} 
-                                                            title="Post Voucher"
-                                                        >
-                                                            <Icons.CheckCircle size={14} />
-                                                        </button>
-                                                    )}
-                                                    {/* Cancel Button - Always shows for draft vouchers (status = 1) */}
+                                                    <button 
+                                                        className="mva-action-btn" 
+                                                        onClick={() => handleViewVoucher(voucher)} 
+                                                        title="View"
+                                                    >
+                                                        <Icons.Eye size={14} />
+                                                    </button>
+                                                    
                                                     {voucher.status === '1' && (
-                                                        <button 
-                                                            className="mva-action-btn mva-cancel" 
-                                                            onClick={() => handleCancel(voucher)} 
-                                                            title="Cancel Voucher"
-                                                        >
-                                                            <Icons.XCircle size={14} />
-                                                        </button>
-                                                    )}
-                                                    {hasPermission?.(menuId, 'delete') && voucher.status === '1' && (
-                                                        <button 
-                                                            className="mva-action-btn mva-delete" 
-                                                            onClick={() => handleDelete(voucher)} 
-                                                            title="Delete"
-                                                        >
-                                                            <Icons.Trash2 size={14} />
-                                                        </button>
+                                                        <>
+                                                            <button 
+                                                                className="mva-action-btn" 
+                                                                onClick={() => handleEditVoucher(voucher)} 
+                                                                title="Edit"
+                                                            >
+                                                                <Icons.Edit size={14} />
+                                                            </button>
+                                                            <button 
+                                                                className="mva-action-btn mva-post" 
+                                                                onClick={() => {
+                                                                    if (window.confirm(`Are you sure you want to post voucher ${voucher.vno}?`)) {
+                                                                        handlePost(voucher);
+                                                                    }
+                                                                }} 
+                                                                title="Post Voucher"
+                                                            >
+                                                                <Icons.CheckCircle size={14} />
+                                                            </button>
+                                                            <button 
+                                                                className="mva-action-btn mva-cancel" 
+                                                                onClick={() => handleCancel(voucher)} 
+                                                                title="Cancel Voucher"
+                                                            >
+                                                                <Icons.XCircle size={14} />
+                                                            </button>
+                                                            <button 
+                                                                className="mva-action-btn mva-delete" 
+                                                                onClick={() => handleDelete(voucher)} 
+                                                                title="Delete"
+                                                            >
+                                                                <Icons.Trash2 size={14} />
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>

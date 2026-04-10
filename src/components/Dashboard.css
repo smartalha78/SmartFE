@@ -948,7 +948,7 @@
   /* Remove rounded corners when maximized */
 
   margin: 0 auto;
-  background-color: transparent !important;
+  background-color: #e8e8dd !important;
   z-index: 10001;
 }
 
