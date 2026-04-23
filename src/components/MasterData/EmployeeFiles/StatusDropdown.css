@@ -2,8 +2,7 @@
 .status-dropdown-container {
   position: relative;
   display: inline-block;
-  min-width: 120px;
-  z-index: 100; /* Base z-index */
+  
 }
 
 .status-dropdown-button {
@@ -76,19 +75,25 @@
 
 /* Dropdown Menu - FIXED Z-INDEX */
 .status-dropdown-menu {
- 
+  position: absolute;
   top: calc(100% + 5px);
   left: 0;
-  
+
   min-width: 180px;
   max-width: 250px;
+
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
+
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+
+  z-index: 9999; /* 🔥 VERY IMPORTANT */
+
   overflow: hidden;
   animation: dropdownFadeIn 0.2s ease;
 }
+
 
 @keyframes dropdownFadeIn {
   from {

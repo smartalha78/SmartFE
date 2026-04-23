@@ -727,3 +727,222 @@
 .am-cell-value.readonly .am-edit-icon {
     display: none;
 }
+/* Checkbox Cell Styles */
+.am-checkbox-cell {
+    text-align: center;
+    min-width: 120px;
+}
+
+.am-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    justify-content: center;
+}
+
+.am-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.am-checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.am-checkbox-text {
+    font-size: 12px;
+    color: #475569;
+}
+
+/* Audit Info Styles */
+.am-audit-info {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background: #f8fafc;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 12px;
+    border-left: 3px solid #3b82f6;
+}
+
+/* Read-only banner */
+.am-readonly-banner {
+    background-color: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #92400e;
+}
+
+.am-readonly-badge {
+    background-color: #e2e8f0;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 10px;
+}
+
+.am-cell-value.readonly {
+    opacity: 0.8;
+    cursor: not-allowed !important;
+    background-color: #f8fafc;
+}
+
+.am-cell-value.readonly:hover {
+    background-color: #f8fafc !important;
+}
+
+.am-cell-value.readonly .am-edit-icon {
+    display: none;
+}
+/* Shift Dropdown Styles */
+.am-shift-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    min-width: 180px;
+}
+
+.am-shift-cell.editable:hover {
+    background: #f1f5f9;
+}
+
+.am-shift-cell.readonly {
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.am-shift-code {
+    font-weight: 600;
+    color: #3b82f6;
+    background: #eff6ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.am-shift-name {
+    flex: 1;
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.am-shift-select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    cursor: pointer;
+}
+
+.am-shift-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+/* Tab Navigation Styles */
+.am-tabs {
+    display: flex;
+    gap: 0.5rem;
+    background: white;
+    padding: 0.5rem;
+    border-radius: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.am-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: #64748b;
+}
+
+.am-tab-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.am-tab-btn.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.am-tab-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.am-tab-btn.active .am-tab-count {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Tab Content */
+.am-tab-content {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Summary Header */
+.am-summary-header {
+    margin-bottom: 1rem;
+}
+
+.am-summary-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+/* Chart Placeholder */
+.am-chart-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 250px;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    background: #f8fafc;
+    border-radius: 0.75rem;
+}

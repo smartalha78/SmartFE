@@ -52,6 +52,7 @@ const Pagination = ({
             
             <div className="pagination-controls">
                 <button
+                    type="button"
                     className={`pagination-btn ${currentPage === 1 || loading ? 'disabled' : ''}`}
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1 || loading}
@@ -66,6 +67,7 @@ const Pagination = ({
                     {!visiblePages.includes(1) && (
                         <>
                             <button
+                                type="button"
                                 className={`pagination-page ${currentPage === 1 ? 'active' : ''} ${loading ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(1)}
                                 disabled={loading}
@@ -80,6 +82,7 @@ const Pagination = ({
                     {visiblePages.map(page => (
                         <button
                             key={page}
+                            type="button"
                             className={`pagination-page ${currentPage === page ? 'active' : ''} ${loading ? 'disabled' : ''}`}
                             onClick={() => handlePageChange(page)}
                             disabled={loading}
@@ -95,6 +98,7 @@ const Pagination = ({
                                 <span className="pagination-ellipsis">...</span>
                             )}
                             <button
+                                type="button"
                                 className={`pagination-page ${currentPage === totalPages ? 'active' : ''} ${loading ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(totalPages)}
                                 disabled={loading}
@@ -106,6 +110,7 @@ const Pagination = ({
                 </div>
 
                 <button
+                    type="button"
                     className={`pagination-btn ${currentPage === totalPages || loading ? 'disabled' : ''}`}
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || loading}

@@ -259,7 +259,7 @@ const EmployeeRow = React.memo(({ index, data, onUpdate, onRemove, employees, al
 });
 
 /* ---------------------------
- * Voucher Modal Component - FIXED
+ * Voucher Modal Component - WITH PAGINATION
 ---------------------------- */
 const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onCancel, mode, lookupData, currentOffcode, currentUser, currentBcode }) => {
     const [formData, setFormData] = useState({
@@ -271,6 +271,10 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    
+    // Pagination state for employees
+    const [currentEmployeePage, setCurrentEmployeePage] = useState(1);
+    const employeesPerPage = 5;
 
     const { allowances, employees: employeeList } = lookupData;
 
@@ -284,6 +288,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                 vockey: voucher.vockey
             });
             setEmployees(voucher.employees || []);
+            setCurrentEmployeePage(1);
         } else if (isOpen && mode === 'new') {
             setFormData({
                 vdate: new Date().toISOString().split('T')[0],
@@ -291,8 +296,18 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                 status: '1'
             });
             setEmployees([]);
+            setCurrentEmployeePage(1);
         }
     }, [isOpen, voucher, mode]);
+
+    // Get current page employees
+    const getCurrentPageEmployees = useMemo(() => {
+        const startIndex = (currentEmployeePage - 1) * employeesPerPage;
+        const endIndex = startIndex + employeesPerPage;
+        return employees.slice(startIndex, endIndex);
+    }, [employees, currentEmployeePage]);
+
+    const totalEmployeePages = Math.ceil(employees.length / employeesPerPage);
 
     const handleInputChange = useCallback((e) => {
         const { name, value } = e.target;
@@ -304,19 +319,29 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
             EmployeeCode: '', EmployeeName: '', BasicPay: '0',
             AllowancesCode: '', AllowanceName: '', Amount: '0', Percentage: '0'
         }]);
-    }, []);
+        const newTotalPages = Math.ceil((employees.length + 1) / employeesPerPage);
+        setCurrentEmployeePage(newTotalPages);
+    }, [employees.length]);
 
     const handleUpdateEmployee = useCallback((index, updatedData) => {
+        const actualIndex = (currentEmployeePage - 1) * employeesPerPage + index;
         setEmployees(prev => {
             const newEmployees = [...prev];
-            newEmployees[index] = { ...newEmployees[index], ...updatedData };
+            newEmployees[actualIndex] = { ...newEmployees[actualIndex], ...updatedData };
             return newEmployees;
         });
-    }, []);
+    }, [currentEmployeePage]);
 
-    const handleRemoveEmployee = useCallback((index) => {
-        setEmployees(prev => prev.filter((_, i) => i !== index));
-    }, []);
+    const handleRemoveEmployee = useCallback((localIndex) => {
+        const actualIndex = (currentEmployeePage - 1) * employeesPerPage + localIndex;
+        setEmployees(prev => prev.filter((_, i) => i !== actualIndex));
+        const newTotalPages = Math.ceil((employees.length - 1) / employeesPerPage);
+        if (currentEmployeePage > newTotalPages && newTotalPages > 0) {
+            setCurrentEmployeePage(newTotalPages);
+        } else if (newTotalPages === 0) {
+            setCurrentEmployeePage(1);
+        }
+    }, [currentEmployeePage, employees.length]);
 
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
@@ -380,8 +405,6 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
         }
     }, [voucher, onCancel, onClose]);
 
-    // FIXED: For edit mode, always allow editing regardless of status
-    // Only disable if mode is 'view'
     const canEdit = mode !== 'view';
     const isPosted = formData.status === '2';
     const isCancelled = formData.status === '3';
@@ -398,7 +421,7 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                         {isPosted && <span className="mva-posted-badge">Posted</span>}
                         {isCancelled && <span className="mva-cancelled-badge">Cancelled</span>}
                     </h2>
-                    <button className="mva-modal-close" onClick={onClose}><Icons.X size={18} /></button>
+                    <button type="button" className="mva-modal-close" onClick={onClose}><Icons.X size={18} /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="mva-modal-form">
@@ -466,21 +489,38 @@ const VoucherModal = React.memo(({ isOpen, onClose, voucher, onSave, onPost, onC
                                             <div className="mva-header-amount">Amount / %</div>
                                             <div className="mva-header-actions"></div>
                                         </div>
-                                        {employees.map((emp, idx) => (
-                                            <EmployeeRow
-                                                key={idx}
-                                                index={idx}
-                                                data={emp}
-                                                onUpdate={(updated) => handleUpdateEmployee(idx, updated)}
-                                                onRemove={handleRemoveEmployee}
-                                                employees={employeeList}
-                                                allowances={allowances}
-                                                canEdit={canEdit}
-                                            />
-                                        ))}
+                                        
+                                        {getCurrentPageEmployees.map((emp, idx) => {
+                                            const actualIndex = (currentEmployeePage - 1) * employeesPerPage + idx;
+                                            return (
+                                                <EmployeeRow
+                                                    key={actualIndex}
+                                                    index={idx}
+                                                    data={emp}
+                                                    onUpdate={(updated) => handleUpdateEmployee(idx, updated)}
+                                                    onRemove={handleRemoveEmployee}
+                                                    employees={employeeList}
+                                                    allowances={allowances}
+                                                    canEdit={canEdit}
+                                                />
+                                            );
+                                        })}
                                     </>
                                 )}
                             </div>
+                            
+                            {totalEmployeePages > 1 && (
+                                <div className="mva-employee-pagination-wrapper">
+                                    <Pagination 
+                                        currentPage={currentEmployeePage}
+                                        totalItems={employees.length}
+                                        itemsPerPage={employeesPerPage}
+                                        onPageChange={setCurrentEmployeePage}
+                                        maxVisiblePages={5}
+                                        loading={false}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -727,7 +767,6 @@ const MonthlyVariableAllowance = () => {
     }, [fetchVoucherWithDetails, currentOffcode]);
 
     const handleEditVoucher = useCallback(async (voucher) => {
-        // Check if voucher is posted or cancelled
         if (voucher.status === '2') {
             setMessage('⚠️ Cannot edit a posted voucher');
             return;
@@ -947,7 +986,6 @@ const MonthlyVariableAllowance = () => {
         }
     }, []);
 
-    // Show loading state while rights are being loaded
     if (rightsLoading || isMenuLoading) {
         return (
             <div className="mva-loading-container">
@@ -961,12 +999,12 @@ const MonthlyVariableAllowance = () => {
         <div className="mva-container">
             <div className="mva-toolbar">
                 <div className="mva-toolbar-group">
-                    <button className="mva-toolbar-btn mva-primary" onClick={handleNewVoucher}>
+                    <button type="button" className="mva-toolbar-btn mva-primary" onClick={handleNewVoucher}>
                         <Icons.Plus size={14} /> <span>New Voucher</span>
                     </button>
                 </div>
                 <div className="mva-toolbar-group">
-                    <button className="mva-toolbar-btn" onClick={() => fetchVouchers(currentPage, pageSize, searchTerm)}>
+                    <button type="button" className="mva-toolbar-btn" onClick={() => fetchVouchers(currentPage, pageSize, searchTerm)}>
                         <Icons.RefreshCw size={14} /> <span>Refresh</span>
                     </button>
                 </div>
@@ -980,7 +1018,7 @@ const MonthlyVariableAllowance = () => {
                         {message.includes('⚠️') && <Icons.AlertTriangle size={16} />}
                         <span>{(error || message).replace(/[✅❌⚠️]/g, '')}</span>
                     </div>
-                    <button className="mva-toast-close" onClick={() => { setError(''); setMessage(''); }}>
+                    <button type="button" className="mva-toast-close" onClick={() => { setError(''); setMessage(''); }}>
                         <Icons.X size={12} />
                     </button>
                 </div>
@@ -1030,6 +1068,7 @@ const MonthlyVariableAllowance = () => {
                                             <td>
                                                 <div className="mva-action-buttons">
                                                     <button 
+                                                        type="button"
                                                         className="mva-action-btn" 
                                                         onClick={() => handleViewVoucher(voucher)} 
                                                         title="View"
@@ -1040,6 +1079,7 @@ const MonthlyVariableAllowance = () => {
                                                     {voucher.status === '1' && (
                                                         <>
                                                             <button 
+                                                                type="button"
                                                                 className="mva-action-btn" 
                                                                 onClick={() => handleEditVoucher(voucher)} 
                                                                 title="Edit"
@@ -1047,6 +1087,7 @@ const MonthlyVariableAllowance = () => {
                                                                 <Icons.Edit size={14} />
                                                             </button>
                                                             <button 
+                                                                type="button"
                                                                 className="mva-action-btn mva-post" 
                                                                 onClick={() => {
                                                                     if (window.confirm(`Are you sure you want to post voucher ${voucher.vno}?`)) {
@@ -1058,6 +1099,7 @@ const MonthlyVariableAllowance = () => {
                                                                 <Icons.CheckCircle size={14} />
                                                             </button>
                                                             <button 
+                                                                type="button"
                                                                 className="mva-action-btn mva-cancel" 
                                                                 onClick={() => handleCancel(voucher)} 
                                                                 title="Cancel Voucher"
@@ -1065,6 +1107,7 @@ const MonthlyVariableAllowance = () => {
                                                                 <Icons.XCircle size={14} />
                                                             </button>
                                                             <button 
+                                                                type="button"
                                                                 className="mva-action-btn mva-delete" 
                                                                 onClick={() => handleDelete(voucher)} 
                                                                 title="Delete"
