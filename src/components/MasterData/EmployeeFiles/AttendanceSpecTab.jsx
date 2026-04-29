@@ -52,16 +52,18 @@ const AttendanceSpecTab = ({
 
   // Attendance settings fields that are in HRMSEmployee table
   const attendanceFields = [
-    { name: "offdayBonusAllow", label: "Off Day Bonus Allow", type: "checkbox" },
-    { name: "AutoAttendanceAllow", label: "Auto Attendance Allow", type: "checkbox" },
-    { name: "OverTimeAllow", label: "Over Time Allow", type: "checkbox" },
-    { name: "LateTimeAllow", label: "Late Time Allow", type: "checkbox" },
-    { name: "EarlyLateAllow", label: "Early/Late Allow", type: "checkbox" },
-    { name: "HolyDayBonusAllow", label: "Holiday Bonus Allow", type: "checkbox" },
-    { name: "PunctuailityAllown", label: "Punctuality Allow", type: "checkbox" },
-    { name: "EmployeeCommisionBonusActive", label: "Commission Bonus Active", type: "checkbox" },
-    { name: "EmployeeEarlyLateDeductionOnTimeActive", label: "Early/Late Deduction Active", type: "checkbox" },
+    { name: "AutoAttendanceAllow", label: "Auto Attendance", type: "checkbox" },
+    { name: "OverTimeAllow", label: "Over Time", type: "checkbox" },
+    { name: "offdayBonusAllow", label: "Off Day Bonus", type: "checkbox" },
+    { name: "HolyDayBonusAllow", label: "Holiday Bonus", type: "checkbox" },
+    { name: "LateTimeAllow", label: "Late Time", type: "checkbox" },
+    { name: "EarlyLateAllow", label: "Early/Late Deduction", type: "checkbox" },
+    { name: "EmployeeEarlyLateDeductionOnTimeActive", label: "Early/Late Ded. Per Mintue", type: "checkbox" },
     { name: "EarlyLateNoofDeductionExempt", label: "Early/Late Exempt Days", type: "number" },
+    { name: "PunctuailityAllown", label: "Punctuality Allow", type: "checkbox" },
+    { name: "EmployeeCommisionBonusActive", label: "Commission Bonus", type: "checkbox" },
+    
+    
     
     { name: "EmployeeCommisionBonusPer", label: "Commission Bonus %", type: "number" },
     { name: "OTAllowedPerDay", label: "OT Allowed Per Day", type: "number" }

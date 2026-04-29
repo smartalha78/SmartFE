@@ -11,13 +11,13 @@ import HRMSDesignation from "../components/HRMSFiles/HRMSDesignation";
 import HRMSBank from "./HRMSFiles/HRMSBank";
 import HRMSBenifit from "./HRMSFiles/HRMSBenifit";
 // import Department from "../components/Department";
-// import CashPaymentVoucher from "../components/Finance/CashPaymentVoucher";
-// import BankPaymentVoucher from "../components/Finance/BankPaymentVoucher";
-// import CashReceiptVoucher from "../components/Finance/CashReceiptVoucher";
-// import BankReceiptVoucher from "../components/Finance/BankReceiptVoucher";
-// import PayablesScreen from "../components/Finance/PayablesScreen";
-// import ReceivablesScreen from "../components/Finance/ReceivablesScreen";
-// import JournalVoucherManual from "../components/Finance/JournalVoucherManual";
+import CashPaymentVoucher from "./Finance/CashPaymentVoucher";
+import BankPaymentVoucher from "./Finance/BankPaymentVoucher";
+import CashReceiptVoucher from "./Finance/CashReceiptVoucher";
+import BankReceiptVoucher from "./Finance/BankReceiptVoucher";
+import PayablesScreen from "./Finance/PayablesScreen";
+import ReceivablesScreen from "./Finance/ReceivablesScreen";
+import JournalVoucherManual from "./Finance/JournalVoucherManual";
 import HRMSEmployeeType from "./HRMSFiles/HRMSEmployeeType";
 import HRMSAllowanceType from "../components/HRMSFiles/HRMSAllowanceType";
 import HRMSDeductionType from "./HRMSFiles/HRMSDeductionType";
@@ -46,7 +46,7 @@ import IMFColor from "./HRMSFiles/IMFColor";
 import acGroup from "./HRMSFiles/acGroup";
 import lndFrequency from "../components/HRMSFiles/lndFrequency";
 import HRMSEmployeeFile from "./MasterData/EmployeeFiles/EmployeeManagement";
-// import GoodsReceiptNote from "../components/GoodsReceiptNote";
+import GoodsReceiptNote from "./Inventory/GoodsReceiptNote";
 import ChartofAccount from "./MasterData/ChartofAccount";
 import IMF from "./MasterData/IMF";
 import CustomerSupplierProfile from "./MasterData/CustomerSupplierProfile";
@@ -60,7 +60,10 @@ import MonthlyVariableAllowance from "./Payroll/MonthlyVariableAllowance";
 // import Vechiles from "../components/Vechiles";
 import AttendanceMachines from "./MasterData/AttendanceMachines";
 import AttendanceManagement from "./Payroll/AttendanceManagement";
-// import BOMCreation from "./MRP/BOMCreation";
+import BOMCreation from "./MRP/BOMCreation";
+import ProductCosting from "./MRP/ProductCosting";
+import SaleInvoice from "./SaleSystem/SaleInvoice";
+import SaleOrder from "./SaleSystem/SaleOrder";
 // import EInvoice from "../components/EInvioce";
 import { FiMenu, FiChevronDown, FiChevronRight, FiChevronLeft } from 'react-icons/fi';
 import {
@@ -137,6 +140,9 @@ const menuIcons = {
   "AttendanceMachines": <FaBook />,
   "AttendanceManagement": <FaBook />,
   "BOMCreation": <FaBook />,
+    "ProductCosting": <FaBook />,
+    "SaleInvoice": <FaBook />,
+    "SaleOrder": <FaBook />,
   "LabourProfile": <FaBook />,
     "MonthlyVariableAllowance": <FaBook />,
   "Vechiles": <FaBook />,
@@ -404,7 +410,9 @@ function Dashboard() {
   const openAttendanceMachinesTypeModal = createModalOpener("AttendanceMachines");
   const openAttendanceManagementTypeModal = createModalOpener("AttendanceManagement");
   const openBOMCreationTypeModal = createModalOpener("BOMCreation");
-
+  const openProductCostingTypeModal = createModalOpener("ProductCosting");
+  const openSaleInvoiceTypeModal = createModalOpener("SaleInvoice");
+  const openSaleOrderTypeModal = createModalOpener("SaleOrder");
   // Special case for department modal (nested modal)
   const openDepartmentModal = (action) => {
     setModalStack(prev => [...prev, {
@@ -502,6 +510,9 @@ function Dashboard() {
       "Attendance Machines": "AttendanceMachines",
       "Attendance": "AttendanceManagement",
       "BOM Creation": "BOMCreation",
+      "Product Costing": "ProductCosting",
+      "Sale Invoice": "SaleInvoice",
+      "Sale Order": "SaleOrder",
       "Size": "IMFSize"
     };
     return titleMap[title] || title;
@@ -774,6 +785,18 @@ function Dashboard() {
       openBOMCreationTypeModal();
       return;
     }
+     if (clickedItem.title === "Product Costing") {
+      openProductCostingTypeModal();
+      return;
+    }
+     if (clickedItem.title === "Sale Invoice") {
+      openSaleInvoiceTypeModal();
+      return;
+    }
+    if (clickedItem.title === "Sale Order") {
+      openSaleOrderTypeModal();
+      return;
+    }
     if (clickedItem.title === "Size") {
       openIMFSizeTypeModal();
       return;
@@ -948,27 +971,27 @@ function Dashboard() {
       // case "department":
       //   ModalComponent = Department;
       //   break;
-      // case "CashPaymentVoucher":
-      //   ModalComponent = CashPaymentVoucher;
-      //   break;
-      // case "BankPaymentVoucher":
-      // ModalComponent = BankPaymentVoucher;
-      // break;
-      // case "CashReceiptVoucher":
-      // ModalComponent = CashReceiptVoucher;
-      // break;
-      // case "BankReceiptVoucher":
-      // ModalComponent = BankReceiptVoucher;
-      // break;
-      //  case "PayablesScreen":
-      // ModalComponent = PayablesScreen;
-      // break;
-      //  case "ReceivablesScreen":
-      // ModalComponent = ReceivablesScreen;
-      // break;
-      // case "JournalVoucherManual":
-      // ModalComponent = JournalVoucherManual;
-      // break;
+      case "CashPaymentVoucher":
+        ModalComponent = CashPaymentVoucher;
+        break;
+      case "BankPaymentVoucher":
+      ModalComponent = BankPaymentVoucher;
+      break;
+      case "CashReceiptVoucher":
+      ModalComponent = CashReceiptVoucher;
+      break;
+      case "BankReceiptVoucher":
+      ModalComponent = BankReceiptVoucher;
+      break;
+       case "PayablesScreen":
+      ModalComponent = PayablesScreen;
+      break;
+       case "ReceivablesScreen":
+      ModalComponent = ReceivablesScreen;
+      break;
+      case "JournalVoucherManual":
+      ModalComponent = JournalVoucherManual;
+      break;
       case "HRMSEmployeeType":
         ModalComponent = HRMSEmployeeType;
         break;
@@ -1050,9 +1073,9 @@ function Dashboard() {
       case "HRMSEmployeeFile":
         ModalComponent = HRMSEmployeeFile;
         break;
-      // case "GoodsReceiptNote":
-      //   ModalComponent = GoodsReceiptNote;
-      //   break;
+      case "GoodsReceiptNote":
+        ModalComponent = GoodsReceiptNote;
+        break;
       // case "IMFSize":
       //   ModalComponent = IMFSize;
       //   break;
@@ -1092,9 +1115,18 @@ function Dashboard() {
       case "AttendanceManagement":
         ModalComponent = AttendanceManagement;
         break;
-      // case "BOMCreation":
-      //   ModalComponent = BOMCreation;
-      //   break;
+      case "BOMCreation":
+        ModalComponent = BOMCreation;
+        break;
+      case "ProductCosting":
+        ModalComponent = ProductCosting;
+        break;
+      case "SaleInvoice":
+        ModalComponent = SaleInvoice;
+        break;
+      case "SaleOrder":
+        ModalComponent = SaleOrder;
+        break;
       case "CustomerSupplierProfile":
         ModalComponent = CustomerSupplierProfile;
         break
@@ -1240,6 +1272,9 @@ function Dashboard() {
       'AttendanceMachines': 'Attendance Machines',
       'AttendanceManagement': 'Attendance',
       'BOMCreation': 'BOM Creation',
+      'ProductCosting': 'Product Costing',
+      'SaleInvoice': 'Sale Invoice',
+      'SaleOrder': 'Sale Order',
       'CustomerSupplierProfile': 'Customer/Supplier Profile',
       // 'einvoice': 'E-Invoice'
     };

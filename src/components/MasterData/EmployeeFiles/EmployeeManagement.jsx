@@ -1278,13 +1278,13 @@ const EmployeeManagement = () => {
         { name: "FName", label: "First Name", required: true, colSpan: 1 },
         { name: "MName", label: "Middle Name", colSpan: 1 },
         { name: "LName", label: "Last Name", colSpan: 1 },
-        { name: "FatherName", label: "Father's Name", colSpan: 2 },
+        { name: "FatherName", label: "Father's Name", colSpan: 1 },
         { name: "DOB", label: "Date of Birth", type: "date", colSpan: 1 },
         { name: "Gender", label: "Gender", type: "select", options: genders, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
         { name: "MarriadStatus", label: "Marital Status", type: "select", options: maritalStatuses, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
         { name: "Religin", label: "Religion", type: "select", options: religions, valueKey: "ccode", labelKey: "cname", colSpan: 1 },
         { name: "Nationality", label: "Nationality", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
-        { name: "IDNo", label: "CNIC/NIC", placeholder: "12345-1234567-1", colSpan: 2 },
+        { name: "IDNo", label: "CNIC/NIC", placeholder: "12345-1234567-1", colSpan: 1 },
         { name: "IDExpiryDate", label: "ID Expiry", type: "date", colSpan: 1 },
         { name: "PassportNo", label: "Passport No", colSpan: 1 },
         { name: "PassportExpiryDate", label: "Passport Expiry", type: "date", colSpan: 1 },
@@ -1292,7 +1292,7 @@ const EmployeeManagement = () => {
         { name: "Email", label: "Email", type: "email", colSpan: 2 },
         { name: "P_Phone", label: "Phone", colSpan: 1 },
         { name: "NoOfDependant", label: "Number of Dependants", type: "number" },
-        { name: "Remarks", label: "Remarks", type: "textarea", colSpan: 2 }
+        { name: "Remarks", label: "Remarks", type: "textarea", colSpan: 3 }
       ] },
       { key: 'address', title: "Address Information", icon: <FaHome />, fields: [
         { name: "P_Country", label: "Permanent Country", type: "select", options: countries, valueKey: "CountryID", labelKey: "CountryName", colSpan: 1 },
@@ -1363,7 +1363,7 @@ const EmployeeManagement = () => {
         {visibleSections.map((section) => (
           <div key={section.key} id={`section-${section.key}`} className="employee-info-section">
             <div className="section-header"><div className="header-left">{section.icon}<h4>{section.title}</h4></div></div>
-            <div className="form-grid">
+            <div className="form-grid-employee">
               {section.fields.map(field => {
                 const value = formData[field.name] !== undefined ? formData[field.name] : "";
                 const maxLength = field.maxLength || getMaxLength(field.name);

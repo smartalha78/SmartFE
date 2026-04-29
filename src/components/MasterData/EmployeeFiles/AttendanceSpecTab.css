@@ -68,13 +68,13 @@
 /* FORM GROUP */
 .attendance-spec-tab .form-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
 }
 
 /* LABEL */
 .attendance-spec-tab .field-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #4b5563;
   text-transform: uppercase;
@@ -265,8 +265,8 @@
 }
 
 .custom-checkbox .checkmark:after {
-  left: 6px;
-  top: 2px;
+  left: 5px;
+  top: 0;
   width: 5px;
   height: 10px;
   border: solid white;
